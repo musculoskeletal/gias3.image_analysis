@@ -19,7 +19,7 @@ from matplotlib import pyplot as plot
 from gias2.learning import PCA
 import sys
 import time
-usePyxScan = True
+usePyxScan = False
 
 def genSamplingPoints( X, N, d, xLim ):
 	""" at each point in X[i], in direction N[i], calc the coordinates

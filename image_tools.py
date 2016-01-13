@@ -199,7 +199,7 @@ class Scan:
 		#~ return
 
 	#==================================================================#
-	def LoadScanFolder( self, folder, suffix='.png' ):
+	def loadScanFolder( self, folder, suffix='.png' ):
 		""" Loads all .png files in the folder into an array
 		representation
 		"""
@@ -223,14 +223,14 @@ class Scan:
 		return
 		
 	#==================================================================#
-	def LoadDicomFolder(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None, newLoadMethod=True):
+	def loadDicomFolder(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None, newLoadMethod=True):
 		if newLoadMethod:
-			return self.LoadDicomFolderNew( folder, filter, filePattern, sliceSpacingOveride, nSlice)
+			return self.loadDicomFolderNew( folder, filter, filePattern, sliceSpacingOveride, nSlice)
 		else:
-			return self.LoadDicomFolderOld( folder, filter, filePattern, sliceSpacingOveride, nSlice)
+			return self.loadDicomFolderOld( folder, filter, filePattern, sliceSpacingOveride, nSlice)
 		
 	#==================================================================#
-	def LoadDicomFolderOld(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
+	def loadDicomFolderOld(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
 		
 		# add /
 		if folder[-1] != '/':
@@ -299,7 +299,7 @@ class Scan:
 		self.voxelOrigin = scipy.array(self.slice0.ImagePositionPatient)
 
 	#==================================================================#
-	def LoadDicomFolderNew(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
+	def loadDicomFolderNew(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
 		"""
 		uses pydicom.contrib.pydicom_series.py
 		"""

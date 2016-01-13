@@ -16,7 +16,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import scipy
 from scipy import ndimage
 from matplotlib import pyplot as plot
-from gias.learning import PCA
+from gias2.learning import PCA
 import sys
 import time
 usePyxScan = True

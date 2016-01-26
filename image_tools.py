@@ -139,12 +139,12 @@ class Scan:
 		self.calculateCoM()
 		self.calculatePrincipalAxes()
 
-		if voxelSpacing!=None:
+		if voxelSpacing is not None:
 			self.voxelSpacing = scipy.array(voxelSpacing)
 		else:
 			self.voxelSpacing = scipy.array([1.0,1.0,1.0])
 
-		if voxelOrigin!=None:
+		if voxelOrigin is not None:
 			self.voxelOrigin = scipy.array(voxelOrigin)
 		else:
 			self.voxelOrigin = scipy.array([0.0,0.0,0.0])

@@ -15,10 +15,15 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import scipy
 from scipy import ndimage
-from matplotlib import pyplot as plot
 from gias2.learning import PCA
 import sys
 import time
+try:
+	from matplotlib import pyplot as plot
+	import matplotlib as mpl
+except ImportError:
+	print('No Matplotlib, plotting functions will not work.')
+	
 usePyxScan = False
 
 def genSamplingPoints( X, N, d, xLim ):

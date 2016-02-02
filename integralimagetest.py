@@ -13,8 +13,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import numpy as np
-from gias.image_analysis import integralimage
-from gias.image_analysis import haar
+from gias2.image_analysis import integralimage
+from gias2.image_analysis import haar
 import unittest
 
 

@@ -22,8 +22,8 @@ from scipy.spatial.distance import euclidean
 from scipy.ndimage import rotate, affine_transform, zoom, map_coordinates, gaussian_filter1d, median_filter
 from scipy.interpolate import LSQUnivariateSpline
 from scipy.stats import linregress
-from scipy.misc import imread
-from scipy.misc import imsave
+# from scipy.misc import imread
+# from scipy.misc import imsave
 import numpy.ma as ma
 import re
 import dicom
@@ -198,29 +198,29 @@ class Scan:
 		#~ 
 		#~ return
 
-	#==================================================================#
-	def loadScanFolder( self, folder, suffix='.png' ):
-		""" Loads all .png files in the folder into an array
-		representation
-		"""
+	# #==================================================================#
+	# def loadScanFolder( self, folder, suffix='.png' ):
+	# 	""" Loads all .png files in the folder into an array
+	# 	representation
+	# 	"""
 		
-		# add /
-		if folder[-1] != '/':
-			self.read_folder = folder+'/'
-		else:
-			self.read_folder = folder
+	# 	# add /
+	# 	if folder[-1] != '/':
+	# 		self.read_folder = folder+'/'
+	# 	else:
+	# 		self.read_folder = folder
 		
-		slice = 0
-		fileList = glob.glob( self.read_folder+'*'+suffix )
-		fileList.sort()
+	# 	slice = 0
+	# 	fileList = glob.glob( self.read_folder+'*'+suffix )
+	# 	fileList.sort()
 		
-		# scipy
-		self.I = scipy.array( [ imread( f ) for f in fileList ] ) 
-		print 'loaded image shape:', self.I.shape
+	# 	# scipy
+	# 	self.I = scipy.array( [ imread( f ) for f in fileList ] ) 
+	# 	print 'loaded image shape:', self.I.shape
 		
-		self._updateI()
+	# 	self._updateI()
 		
-		return
+	# 	return
 		
 	#==================================================================#
 	def loadDicomFolder(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None, newLoadMethod=True):
@@ -524,16 +524,16 @@ class Scan:
 		#~ return
 		
 	#==================================================================#
-	def writeSlice( self, prefix ):
+	# def writeSlice( self, prefix ):
 		
-		writeSlice( self.I, prefix )
+	# 	writeSlice( self.I, prefix )
 		
-		#~ numLength = int( scipy.log10( self.I.shape[0] ) ) + 2
-		#~ for i in range(self.I.shape[0]):
-			#~ filename = prefix + "_%.*d"%(numLength, i ) +'.png'
-			#~ imsave( filename, self.I[i,:,:] )	
+	# 	#~ numLength = int( scipy.log10( self.I.shape[0] ) ) + 2
+	# 	#~ for i in range(self.I.shape[0]):
+	# 		#~ filename = prefix + "_%.*d"%(numLength, i ) +'.png'
+	# 		#~ imsave( filename, self.I[i,:,:] )	
 		
-		return
+	# 	return
 		
 	#==================================================================#	
 	def _updateI( self ):
@@ -1601,25 +1601,25 @@ class slice:
 		return
 			
 #======================================================================#
-def writeSlice( imageArray, prefix, sliceDim=0 ):
-	numLength = int( scipy.log10( imageArray.shape[sliceDim] ) ) + 2
+# def writeSlice( imageArray, prefix, sliceDim=0 ):
+# 	numLength = int( scipy.log10( imageArray.shape[sliceDim] ) ) + 2
 	
-	if sliceDim==0:
-		for i in range( imageArray.shape[sliceDim]):
-			filename = prefix + "_%.*d"%(numLength, i ) +'.png'
-			imsave( filename, imageArray[i,:,:] )
-	elif sliceDim==1:
-		for i in range( imageArray.shape[sliceDim]):
-			filename = prefix + "_%.*d"%(numLength, i ) +'.png'
-			imsave( filename, imageArray[:,i,:] )
-	elif sliceDim==2:
-		for i in range( imageArray.shape[sliceDim]):
-			filename = prefix + "_%.*d"%(numLength, i ) +'.png'
-			imsave( filename, imageArray[:,:,i] )
-	else:
-		raise InputError, 'invalid sliceDim'
+# 	if sliceDim==0:
+# 		for i in range( imageArray.shape[sliceDim]):
+# 			filename = prefix + "_%.*d"%(numLength, i ) +'.png'
+# 			imsave( filename, imageArray[i,:,:] )
+# 	elif sliceDim==1:
+# 		for i in range( imageArray.shape[sliceDim]):
+# 			filename = prefix + "_%.*d"%(numLength, i ) +'.png'
+# 			imsave( filename, imageArray[:,i,:] )
+# 	elif sliceDim==2:
+# 		for i in range( imageArray.shape[sliceDim]):
+# 			filename = prefix + "_%.*d"%(numLength, i ) +'.png'
+# 			imsave( filename, imageArray[:,:,i] )
+# 	else:
+# 		raise InputError, 'invalid sliceDim'
 		
-	return
+# 	return
 
 #======================================================================#
 def pad(array, t, padval = 0):

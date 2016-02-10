@@ -26,8 +26,12 @@ from scipy.stats import linregress
 # from scipy.misc import imsave
 import numpy.ma as ma
 import re
-import dicom
-import dicom.contrib.pydicom_series as dicomSeries
+try:
+	import dicom
+	import dicom.contrib.pydicom_series as dicomSeries
+except ImportError:
+	import pydicom as dicom
+	import pydicom.contrib.pydicom_series as dicomSeries
 import os
 import sys
 

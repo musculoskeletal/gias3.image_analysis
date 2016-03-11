@@ -20,17 +20,17 @@ import unittest
 
 class TestIntegralImage(unittest.TestCase):
 
-	def testIntegralImage3(self):
-		I = np.ones([5,5,5], dtype=int)
-		II = integralimage.IntegralImage3( I )
-		s = II.getSum(1,1,1,2,2,2)
-		self.assertEqual(s,8)
+    def testIntegralImage3(self):
+        I = np.ones([5,5,5], dtype=int)
+        II = integralimage.IntegralImage3( I )
+        s = II.getSum(1,1,1,2,2,2)
+        self.assertEqual(s,8)
 
-	def testIntegralImage2(self):
-		I = np.ones([5,5], dtype=int)
-		II = integralimage.IntegralImage2(I)
-		s = II.getSum(1,1,2,2)
-		self.assertEqual(s,4)
+    def testIntegralImage2(self):
+        I = np.ones([5,5], dtype=int)
+        II = integralimage.IntegralImage2(I)
+        s = II.getSum(1,1,2,2)
+        self.assertEqual(s,4)
 
 if __name__=='__main__':
-	unittest.main()
+    unittest.main()

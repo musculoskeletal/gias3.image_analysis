@@ -34,7 +34,7 @@ def scanProfile( dP, PC, modes ):
 	#~ dP = dP/abs(dP).sum()	# normalise whole profile
 	
 	# calculate m distance at each position
-	for s in xrange(nShift):
+	for s in range(nShift):
 		
 		
 		#~ dp = calcDeriv( P[s:s+ND] )

@@ -1338,7 +1338,7 @@ class slice:
         """ calculate self.I's principal axes and magnitudes
         """
         if self.isZeroMass:
-            print('ERROR: Scan.calculatePrincipalAxes: zero-mass object')
+            print('WARNING: Scan.calculatePrincipalAxes: zero-mass object')
             return
             
         self.momentMatrix = scipy.zeros( (2,2) )

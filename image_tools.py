@@ -88,6 +88,70 @@ def filterDicomPixels(dicomData):
     newPixelArray = scalePixel*(pixelArray-minPixel)
     return newPixelArray
 
+def load_series(folder, filepat=None, suid=None, readall=False):
+    """
+    Reads DICOM files in a specified folder and returns one or more
+    image series. By default, only returns the series with the
+    most number of slices.
+
+    inputs
+    ------
+    folder : str
+        path to the dicom folder
+    filepat : str (optional)
+        regex pattern matching the dicom filenames in the folder.
+        If None, will try to read all files in folder
+    suid : str (optional)
+        The UID of the series to be read from the dicom files.
+        If not define, the series with the most number of slices
+        is read.
+    readall : bool
+        If true, all series are returned.
+
+    returns
+    -------
+    series : pydicom_series instance or list of pydicom_series instances
+    """
+
+    # Get directory list of files
+    directoryList = sorted(os.listdir(folder))
+
+    if filepat is not None:
+        # Find file pattern in directory list of files
+        reFilePattern = re.compile(filepat, re.IGNORECASE)
+        files = [os.path.join(folder, f) for f in directoryList if reFilePattern.search(f)]
+        if len(files)==0:
+            raise IOError('No files found')
+    else:
+        files = [os.path.join(folder, f) for f in directoryList]
+    
+    # load series
+    print(('Reading {} slices.'.format(len(files))))
+    series = dicomSeries.read_files(
+                files, showProgress=True, readPixelData=False
+                )
+
+    if not readall:
+        if suid is None:
+            n_slices = [s.shape[0] for s in series]
+            ret_series = series[scipy.argmax(n_slices)]
+            print('Loading largest series {}'.format(ret_series.suid))
+            print(ret_series.info.SeriesDescription)
+        else:
+            found_series = False
+            for s in series:
+                if s.suid==suid:
+                    ret_series = s
+                    print('Loading series {}'.format(ret_series.suid))
+                    print(ret_series.info.SeriesDescription)
+                    found_series = True
+
+            if not found_series:
+                raise ValueError('Cannot find series matching input suid')
+    else:
+        ret_series = series
+
+    return ret_series
     
 class Scan:
     """ Class for reading and limited manipulation of an image stack

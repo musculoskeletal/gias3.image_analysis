@@ -24,7 +24,7 @@ try:
 except ImportError:
     print('No Matplotlib, plotting functions will not work.')
     
-usePyxScan = False
+usePyxScan = True
 
 def genSamplingPoints( X, N, d, xLim ):
     """ at each point in X[i], in direction N[i], calc the coordinates

@@ -136,14 +136,14 @@ def load_series(folder, filepat=None, suid=None, readall=False):
             n_slices = [s.shape[0] for s in series]
             ret_series = series[scipy.argmax(n_slices)]
             print('Loading largest series {}'.format(ret_series.suid))
-            print(ret_series.info.SeriesDescription)
+            # print(ret_series.info.SeriesDescription)
         else:
             found_series = False
             for s in series:
                 if s.suid==suid:
                     ret_series = s
                     print('Loading series {}'.format(ret_series.suid))
-                    print(ret_series.info.SeriesDescription)
+                    # print(ret_series.info.SeriesDescription)
                     found_series = True
 
             if not found_series:

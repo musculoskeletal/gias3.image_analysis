@@ -19,7 +19,7 @@ from gias2.registration import alignment_analytic
 from scipy.linalg import eigh, inv
 from scipy.optimize import leastsq, fmin
 from scipy.spatial.distance import euclidean
-from scipy.ndimage import rotate, affine_transform, zoom, map_coordinates, gaussian_filter1d, median_filter
+from scipy.ndimage import rotate, affine_transform, zoom, map_coordinates, gaussian_filter1d, gaussian_filter, median_filter
 from scipy.interpolate import LSQUnivariateSpline
 from scipy.stats import linregress
 # from scipy.misc import imread
@@ -947,6 +947,9 @@ class Scan:
 
     def medianFilter(self, size):
         self.I = median_filter(self.I, size=size)
+
+    def gaussianFilter(self, sigma):
+        self.I = gaussian_filter(self.I, sigma)
         
     #==================================================================#
     def pad( self, t, padval = 0):

@@ -19,7 +19,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import numpy as np
 import copy
 from gias2.registration import alignment_fitting
-from gias2.common import transform3D
+from gias2.common import transform3D, math
 from gias2.learning import PCA_fitting
 from gias2.image_analysis import image_tools
 from gias2.image_analysis import asm_segmentation as ASM
@@ -187,8 +187,8 @@ def makeGFNormalEvaluator(mode, GF, **kwargs):
             D = dXEval(p)
             d10 = D[:,0]
             d01 = D[:,1]
-            d10Norm = geometric_field.normaliseVectors( d10.T )
-            d01Norm = geometric_field.normaliseVectors( d01.T )
+            d10Norm = math.norms( d10.T )
+            d01Norm = math.norms( d01.T )
             return np.cross( d10Norm, d01Norm )
 
         def GFNormalEval(X):
@@ -207,8 +207,8 @@ def makeGFNormalEvaluator(mode, GF, **kwargs):
             D = dXEval(X)
             d10 = D[:,0]
             d01 = D[:,1]
-            d10Norm = geometric_field.normaliseVectors( d10.T )
-            d01Norm = geometric_field.normaliseVectors( d01.T )
+            d10Norm = math.norms( d10.T )
+            d01Norm = math.norms( d01.T )
             return np.cross( d10Norm, d01Norm )
 
     return GFNormalEval

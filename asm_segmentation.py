@@ -100,7 +100,7 @@ if usePyxScan:
     import pyximport
     # reload(pyximport)
     pyximport.install()
-    import asm_search_c
+    from gias2.image_analysis import asm_search_c
     # reload(asm_search_c)
     scanProfile = asm_search_c.scanProfile
     profileSearchElementPoints = asm_search_c.profileSearchElementPoints

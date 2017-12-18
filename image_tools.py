@@ -26,6 +26,9 @@ from scipy.stats import linregress
 # from scipy.misc import imsave
 import numpy.ma as ma
 import re
+
+from skimage.transform import downscale_local_mean
+
 try:
     import dicom
     import dicom.contrib.pydicom_series as dicomSeries
@@ -876,10 +879,26 @@ class Scan:
         scale factor scale.
         """
         self.I = zoom( self.I, scale, order=order )
-        print('New image shape:', self.I.shape)
+        print('New image shape: {}'.format(self.I.shape))
         self._updateI()
         return
     
+    def downscale(self, factors, cval=0, clip=True, copy=False):
+
+        if copy:
+            I = downscale_local_mean(self.I, factors, cval, clip)
+            newScan = Scan(str(self.name)+'_downscaled_{}-{}-{}'.format(*factors))
+            newVoxelSpacing = scipy.array(self.voxelSpacing)*scipy.array(factors)
+            newVoxelOrigin = scipy.array(self.voxelOrigin)
+            newScan.setImageArray(I, newVoxelSpacing, newVoxelOrigin)
+            return newScan
+        else:
+            self.I = downscale_local_mean(self.I, factors, cval, clip)
+            print('New image shape: {}'.format(self.I.shape))
+            self._updateI()
+            for i in range(len(self.voxelSpacing)):
+                self.voxelSpacing[i] *= factors[i]
+
     #==================================================================#
     def affine( self, matrix, offset=None, order=1 ): 
         """ deforms self.I using a 3x3 symmetric transformation matrix 

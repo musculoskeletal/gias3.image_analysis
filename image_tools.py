@@ -303,11 +303,7 @@ class Scan:
     #==================================================================#
     def loadDicomFolderOld(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
         
-        # add /
-        if folder[-1] != '/':
-            self.read_folder = folder+'/'
-        else:
-            self.read_folder = folder
+        self.read_folder = folder
         
         # Get directory list of files
         directoryList = os.listdir(self.read_folder)
@@ -329,9 +325,9 @@ class Scan:
         
         # Open a file to get image size
         try:
-            slice0 = dicom.read_file(self.read_folder+'/'+files[0], force=True)
+            slice0 = dicom.read_file(os.path.join(self.read_folder, files[0]), force=True)
         except TypeError:
-            slice0 = dicom.read_file(self.read_folder+'/'+files[0])
+            slice0 = dicom.read_file(os.path.join(self.read_folder, files[0]))
         self.slice0 = slice0
         
         # Read images into array I
@@ -344,9 +340,9 @@ class Scan:
         self.sliceLocations = scipy.zeros(len(files), dtype=float)
         for sl, f in enumerate(files):
             try:
-                slice = dicom.read_file(self.read_folder+'/'+f, force=True)
+                slice = dicom.read_file(os.path.join(self.read_folder, f), force=True)
             except TypeError:
-                slice = dicom.read_file(self.read_folder+'/'+f)
+                slice = dicom.read_file(os.path.join(self.read_folder, f))
             self.testPixelSpacing(slice)
             if filter:
                 self.I[:,:,sl] = filterDicomPixels(slice)
@@ -376,12 +372,7 @@ class Scan:
         """
         
         print('loading folder '+folder)
-        
-        # add /
-        if folder[-1] != '/':
-            self.read_folder = folder+'/'
-        else:
-            self.read_folder = folder
+        self.read_folder = folder
         
         # Get directory list of files
         directoryList = os.listdir(self.read_folder)
@@ -392,7 +383,7 @@ class Scan:
         files = []
         for f in directoryList:
             if reFilePattern.search(f):
-                files.append(self.read_folder+'/'+f)
+                files.append(os.path.join(self.read_folder, f))
         
         if len(files)==0:
             raise IOError('No files found')

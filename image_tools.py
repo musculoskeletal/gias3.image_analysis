@@ -1923,8 +1923,8 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     # XImage[:,2] -= 190
 
     # crop image to sampling range
-    maxx, maxy, maxz = XImage.max(0) + pad
-    minx, miny, minz = XImage.min(0) - pad
+    maxx, maxy, maxz = (XImage.max(0) + pad).astype(int)
+    minx, miny, minz = (XImage.min(0) - pad).astype(int)
     sx,sy,sz = scan.I.shape
 
     # restrict cropping to be within image size

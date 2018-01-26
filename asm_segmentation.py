@@ -97,6 +97,7 @@ def weightMDist( m, upper ):
     return W
 
 if usePyxScan:
+    import numpy
     import pyximport
     # reload(pyximport)
     pyximport.install(

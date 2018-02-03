@@ -1107,6 +1107,23 @@ class Scan:
         mip = self.getMIP( axis, sliceRange )
         p = plot.imshow( mip, cmap=cm.gray, vmin=vmin, vmax=vmax )
         return p
+
+    def getSIP( self, axis, sliceRange=None ):
+        if sliceRange==None:
+            sip = scipy.fliplr( self.I.sum(axis).T )
+        else:
+            if axis==0:
+                sip = scipy.fliplr( self.I[sliceRange[0]:sliceRange[1],:,:].sum(axis).T )
+            elif axis==1:
+                sip = scipy.fliplr( self.I[:,sliceRange[0]:sliceRange[1],:].sum(axis).T )
+            elif axis==2:
+                sip = scipy.fliplr( self.I[:,:,sliceRange[0]:sliceRange[1]].sum(axis).T )
+        return sip
+
+    def viewSIP( self, axis, sliceRange=None):
+        sip = self.getSIP( axis, sliceRange )
+        p = plot.imshow( sip, cmap=cm.gray)
+        return p
     #==================================================================#        
     # def viewSurface( self, isoValue = 100 ):
     #   if self.I == None:
@@ -1951,7 +1968,10 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     # newScanOrigin = scan.voxelOrigin - (cropOffset + [maxx-minx, maxy-miny,0])*scan.voxelSpacing
 
     if croppedName==None:
-        croppedName = scan.name+'_cropped'
+        if scan.name is None:
+            croppedName = 'cropped'
+        else:
+            croppedName = scan.name+'_cropped'
     croppedScan = Scan(croppedName)
     croppedScan.isMasked = scan.isMasked
     croppedScan.setImageArray(scan.I[minx:maxx,

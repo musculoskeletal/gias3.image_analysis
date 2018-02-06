@@ -368,7 +368,10 @@ class Scan:
     #==================================================================#
     def loadDicomFolderNew(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
         """
-        uses pydicom.contrib.pydicom_series.py
+        uses pydicom.contrib.pydicom_series.py.
+
+        DICOM Coordinate system: http://nipy.org/nibabel/dicom/dicom_orientation.html
+
         """
         
         print('loading folder '+folder)
@@ -402,26 +405,48 @@ class Scan:
         # load stack
         print(('Loading {} slices.'.format(len(files))))
         try:
-            stack = dicomSeries.read_files( files, showProgress=True, readPixelData=True, force=True)[0]
+            self.stack = dicomSeries.read_files( files, showProgress=True, readPixelData=True, force=True)[0]
         except TypeError:
-            stack = dicomSeries.read_files( files, showProgress=True, readPixelData=True)[0]
+            self.stack = dicomSeries.read_files( files, showProgress=True, readPixelData=True)[0]
         
-        self.I = stack.get_pixel_array().astype(scipy.int16)
-        self.info = stack.info
+        self.I = self.stack.get_pixel_array().astype(scipy.int16)
+        self.info = self.stack.info
         
         #======================================================#
         # set axes to be l-r, a-p, s-i
         self.I = self.I.transpose( [2,1,0] )        # original
         # self.I = self.I[:,:,::-1]
-        self.voxelSpacing = scipy.array(stack.sampling[::-1])   # original
+        self.voxelSpacing = scipy.array(self.stack.sampling[::-1])   # original
         #======================================================#
         
         if sliceSpacingOveride!=None:
             self.voxelSpacing[2] = sliceSpacingOveride
-        self.voxelOrigin = scipy.array(stack.info.ImagePositionPatient)
+        self.voxelOrigin = scipy.array(self.stack.info.ImagePositionPatient)
         # self.voxelOffset = self.voxelOrigin - (-1.0*self.voxelSpacing)*self.I.shape
 
-        self.stack = stack
+        # self.stack = stack
+
+        #=====================================================================#
+        # Coordinate transform affine matrix
+        # TO BE INTEGRATED FULLY
+        #=====================================================================#
+        """
+        IPP = scipy.array([float(x) for x in self.stack.info.ImagePositionPatient])
+        IOP = scipy.array([float(x) for x in self.stack.info.ImageOrientationPatient])
+        PS = scipy.array([float(x) for x in self.stack.info.PixelSpacing])
+        T1 = scipy.array([float(x) for x in self.stack._datasets[0].ImagePositionPatient])
+        TN = scipy.array([float(x) for x in self.stack._datasets[-1].ImagePositionPatient])
+        NSlices = self.stack.shape[0]
+        
+        self.index2CoordA = scipy.eye(4, dtype=float)
+        self.index2CoordA[:3,1] = IOP[3:]*PS[1]  # may need to swap with below
+        self.index2CoordA[:3,0] = IOP[:3]*PS[0]
+        self.index2CoordA[:3,2] = (T1-TN)/(1-NSlices)
+        self.index2CoordA[:3,3] = IPP
+
+        self.coord2IndexA = inv(self.index2CoordA)
+        """
+
     #==================================================================#
     def testPixelSpacing(self, slice):
         
@@ -472,12 +497,13 @@ class Scan:
             elif len(X.shape)==1:
                 X[2] -= self.I.shape[2]*self.voxelSpacing[2]
         return X
-        
-    # def coord2IndexOld( self, X ):
-    #   I = ( (X - self.voxelOffset) / (-1.0*self.voxelSpacing) ).astype(int)
-    #   I[:,2] -= self.I.shape[2]
-    #   return I
 
+        # Transform by affine matrix, to be tested
+        """
+        _inds = scipy.pad(I.T, ((0,1),(0,0)), 'constant', constant_values=1)
+        return scipy.dot(self.index2CoordA, _inds)[:3,:].T
+        """
+        
     def coord2Index(self, X, zShift=False, negSpacing=False, roundInt=True):
         """
         converts physical coords p into image index based on self.voxelSpacing
@@ -505,6 +531,12 @@ class Scan:
                 ind[2] += self.I.shape[2]
                 # ind[2] += self.I.shape[2]
         return ind
+
+        # Transform by affine matrix, to be tested
+        """
+        _x = scipy.pad(X.T, ((0,1),(0,0)), 'constant', constant_values=1)
+        return scipy.dot(self.coord2IndexA, _x)[:3,:].T
+        """
     
     #==================================================================#
     def checkIndexInBounds(self, ind):

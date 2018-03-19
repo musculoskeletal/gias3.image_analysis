@@ -160,6 +160,8 @@ class Scan:
     """ Class for reading and limited manipulation of an image stack
     """
 
+    _useCoord2IndexMat = False # experimental
+
     def __init__( self, name ):
 
         self.name = name
@@ -430,7 +432,7 @@ class Scan:
         # Coordinate transform affine matrix
         # TO BE INTEGRATED FULLY
         #=====================================================================#
-        """
+        
         IPP = scipy.array([float(x) for x in self.stack.info.ImagePositionPatient])
         IOP = scipy.array([float(x) for x in self.stack.info.ImageOrientationPatient])
         PS = scipy.array([float(x) for x in self.stack.info.PixelSpacing])
@@ -445,7 +447,7 @@ class Scan:
         self.index2CoordA[:3,3] = IPP
 
         self.coord2IndexA = inv(self.index2CoordA)
-        """
+        
 
     #==================================================================#
     def testPixelSpacing(self, slice):
@@ -486,58 +488,58 @@ class Scan:
     #   return X    
 
     def index2Coord( self, I, negSpacing=False, zShift=False ):
-        if negSpacing:
-            X = -self.voxelSpacing*I + self.voxelOrigin
+        
+        if self._useCoord2IndexMat:
+            # Transform by affine matrix, experimental
+            _inds = scipy.pad(I.T, ((0,1),(0,0)), 'constant', constant_values=1)
+            return scipy.dot(self.index2CoordA, _inds)[:3,:].T
         else:
-            X = self.voxelSpacing*I + self.voxelOrigin
+            if negSpacing:
+                X = -self.voxelSpacing*I + self.voxelOrigin
+            else:
+                X = self.voxelSpacing*I + self.voxelOrigin
 
-        if zShift:
-            if len(X.shape)==2:
-                X[:,2] -= self.I.shape[2]*self.voxelSpacing[2]
-            elif len(X.shape)==1:
-                X[2] -= self.I.shape[2]*self.voxelSpacing[2]
-        return X
-
-        # Transform by affine matrix, to be tested
-        """
-        _inds = scipy.pad(I.T, ((0,1),(0,0)), 'constant', constant_values=1)
-        return scipy.dot(self.index2CoordA, _inds)[:3,:].T
-        """
+            if zShift:
+                if len(X.shape)==2:
+                    X[:,2] -= self.I.shape[2]*self.voxelSpacing[2]
+                elif len(X.shape)==1:
+                    X[2] -= self.I.shape[2]*self.voxelSpacing[2]
+            return X
+        
         
     def coord2Index(self, X, zShift=False, negSpacing=False, roundInt=True):
         """
         converts physical coords p into image index based on self.voxelSpacing
         and self.voxelOrigin
         """
-
-        # return (p / self.voxelSpacing) + self.voxelOffset
-        if negSpacing:
-            # print 'neg spacing'
-            ind = (X - self.voxelOrigin) / (-self.voxelSpacing)
-        else:
-            # ind = scipy.around( (X - self.voxelOffset) / (self.voxelSpacing) ).astype(int)    # original
-            ind = (X - self.voxelOrigin)/(self.voxelSpacing)
-            # ind = scipy.around( (X - self.voxelOrigin)/(self.voxelSpacing) ).astype(int) + [0,0,self.I.shape[2]]
         
-        if roundInt:
-            ind = scipy.around(ind).astype(int)
+        if self._useCoord2IndexMat:
+            # Transform by affine matrix, experimental
+            _x = scipy.pad(X.T, ((0,1),(0,0)), 'constant', constant_values=1)
+            return scipy.dot(self.coord2IndexA, _x)[:3,:].T
+        else:
+            # return (p / self.voxelSpacing) + self.voxelOffset
+            if negSpacing:
+                # print 'neg spacing'
+                ind = (X - self.voxelOrigin) / (-self.voxelSpacing)
+            else:
+                # ind = scipy.around( (X - self.voxelOffset) / (self.voxelSpacing) ).astype(int)    # original
+                ind = (X - self.voxelOrigin)/(self.voxelSpacing)
+                # ind = scipy.around( (X - self.voxelOrigin)/(self.voxelSpacing) ).astype(int) + [0,0,self.I.shape[2]]
+            
+            if roundInt:
+                ind = scipy.around(ind).astype(int)
 
-        if zShift:
-            # print 'z shifting'
-            if len(ind.shape)==2:
-                ind[:,2] += self.I.shape[2]
-                # ind[:,2] += self.I.shape[2]
-            elif len(ind.shape)==1:
-                ind[2] += self.I.shape[2]
-                # ind[2] += self.I.shape[2]
-        return ind
+            if zShift:
+                # print 'z shifting'
+                if len(ind.shape)==2:
+                    ind[:,2] += self.I.shape[2]
+                    # ind[:,2] += self.I.shape[2]
+                elif len(ind.shape)==1:
+                    ind[2] += self.I.shape[2]
+                    # ind[2] += self.I.shape[2]
+            return ind
 
-        # Transform by affine matrix, to be tested
-        """
-        _x = scipy.pad(X.T, ((0,1),(0,0)), 'constant', constant_values=1)
-        return scipy.dot(self.coord2IndexA, _x)[:3,:].T
-        """
-    
     #==================================================================#
     def checkIndexInBounds(self, ind):
         """

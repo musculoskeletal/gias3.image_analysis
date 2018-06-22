@@ -51,6 +51,12 @@ def makeImageSpaceSimpleMesh(scan, sm, negSpacing=False, zShift=True):
     newSM.v = scan.coord2Index(sm.v, negSpacing=negSpacing, zShift=zShift, roundInt=False)
     return newSM
 
+def makeImageSpacePoints(scan, pts, negSpacing=False, zShift=True):
+    """
+    Transform a mesh from physical coords to image voxel indices
+    """
+    return scan.coord2Index(pts, negSpacing=negSpacing, zShift=zShift, roundInt=False)
+
 #============================================================================#
 # mesh evaluation functions                                                  #
 #============================================================================#

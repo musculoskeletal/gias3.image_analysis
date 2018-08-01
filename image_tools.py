@@ -160,7 +160,8 @@ class Scan:
     """ Class for reading and limited manipulation of an image stack
     """
 
-    _useCoord2IndexMat = False # experimental
+    USE_DICOM_AFFINE = False
+    DEFAULT_PATIENT_POSITION = 'FFS'
 
     def __init__( self, name ):
 
@@ -441,13 +442,20 @@ class Scan:
         NSlices = self.stack.shape[0]
         
         self.index2CoordA = scipy.eye(4, dtype=float)
-        self.index2CoordA[:3,1] = IOP[3:]*PS[1]  # may need to swap with below
-        self.index2CoordA[:3,0] = IOP[:3]*PS[0]
-        self.index2CoordA[:3,2] = (T1-TN)/(1-NSlices)
-        self.index2CoordA[:3,3] = IPP
+        self.index2CoordA[:3,1] = IOP[3:]*PS[1]  # in-plane voxel spacing, may need to swap with below
+        self.index2CoordA[:3,0] = IOP[:3]*PS[0]  # in-plane voxel spacing
 
-        self.coord2IndexA = inv(self.index2CoordA)
+        # if feet first
+        # You should also flip the stack Z if FFS, but we don't do that here
+        FF = self.stack.info.get('PatientPosition', self.DEFAULT_PATIENT_POSITION)
+        if FF=='FFS':
+            self.index2CoordA[:3,2] = -(T1-TN)/(1-NSlices)  # slice spacing
+            self.index2CoordA[:3,3] = TN  # last column
+        else:
+            self.index2CoordA[:3,2] = (T1-TN)/(1-NSlices)  # slice spacing
+            self.index2CoordA[:3,3] = T1  # last column
         
+        self.coord2IndexA = inv(self.index2CoordA)
 
     #==================================================================#
     def testPixelSpacing(self, slice):
@@ -489,7 +497,7 @@ class Scan:
 
     def index2Coord( self, I, negSpacing=False, zShift=False ):
         
-        if self._useCoord2IndexMat:
+        if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
             _inds = scipy.pad(I.T, ((0,1),(0,0)), 'constant', constant_values=1)
             return scipy.dot(self.index2CoordA, _inds)[:3,:].T
@@ -513,10 +521,13 @@ class Scan:
         and self.voxelOrigin
         """
         
-        if self._useCoord2IndexMat:
+        if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
-            _x = scipy.pad(X.T, ((0,1),(0,0)), 'constant', constant_values=1)
-            return scipy.dot(self.coord2IndexA, _x)[:3,:].T
+            ind = scipy.pad(X.T, ((0,1),(0,0)), 'constant', constant_values=1)
+            ind = scipy.dot(self.coord2IndexA, ind)[:3,:].T
+            if roundInt:
+                ind = scipy.around(ind).astype(int)
+            return ind
         else:
             # return (p / self.voxelSpacing) + self.voxelOffset
             if negSpacing:

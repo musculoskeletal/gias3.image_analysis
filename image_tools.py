@@ -156,7 +156,7 @@ def load_series(folder, filepat=None, suid=None, readall=False):
 
     return ret_series
 
-def series_affines(self, stack):
+def series_affines(stack, default_patient_position='FFS'):
     """
     Returns the index 2 coordinates and vice versa affine matrix for a dicom series
     """
@@ -168,10 +168,18 @@ def series_affines(self, stack):
     NSlices = stack.shape[0]
     
     index2CoordA = scipy.eye(4, dtype=float)
-    index2CoordA[:3,1] = IOP[3:]*PS[1]  # may need to swap with below
-    index2CoordA[:3,0] = IOP[:3]*PS[0]
-    index2CoordA[:3,2] = (T1-TN)/(1-NSlices)
-    index2CoordA[:3,3] = IPP
+    index2CoordA[:3,1] = IOP[3:]*PS[1]  # in-plane voxel spacing, may need to swap with below
+    index2CoordA[:3,0] = IOP[:3]*PS[0]  # in-plane voxel spacing
+
+    # if feet first
+    # You should also flip the stack Z if FFS, but we don't do that here
+    FF = stack.info.get('PatientPosition', default_patient_position)
+    if FF=='FFS':
+        index2CoordA[:3,2] = -(T1-TN)/(1-NSlices)  # slice spacing
+        index2CoordA[:3,3] = TN  # last column
+    else:
+        index2CoordA[:3,2] = (T1-TN)/(1-NSlices)  # slice spacing
+        index2CoordA[:3,3] = T1  # last column
 
     coord2IndexA = inv(index2CoordA)
 
@@ -181,7 +189,8 @@ class Scan:
     """ Class for reading and limited manipulation of an image stack
     """
 
-    _useCoord2IndexMat = False # experimental
+    USE_DICOM_AFFINE = False
+    DEFAULT_PATIENT_POSITION = 'FFS'
 
     def __init__( self, name ):
 
@@ -229,7 +238,7 @@ class Scan:
     #==================================================================#
     # read / write methods                                             #
     #==================================================================#
-    def setImageArray( self, I, voxelSpacing=None, voxelOrigin=None ):
+    def setImageArray(self, I, voxelSpacing=None, voxelOrigin=None, i2cmat=None, c2imat=None):
         """ set object's image array
         """
         self.I = I
@@ -248,6 +257,9 @@ class Scan:
 
         # self.renderer = vtkRender.VtkImageVolumeRenderer( self.I )
         # self.renderer.setCoM( self.CoM, self.pAxes, self.pAxesMag )
+
+        self.index2CoordA = i2cmat
+        self.coord2IndexA = c2imat
         
         return
 
@@ -465,14 +477,24 @@ class Scan:
         # NSlices = self.stack.shape[0]
         
         # self.index2CoordA = scipy.eye(4, dtype=float)
-        # self.index2CoordA[:3,1] = IOP[3:]*PS[1]  # may need to swap with below
-        # self.index2CoordA[:3,0] = IOP[:3]*PS[0]
-        # self.index2CoordA[:3,2] = (T1-TN)/(1-NSlices)
-        # self.index2CoordA[:3,3] = IPP
+        # self.index2CoordA[:3,1] = IOP[3:]*PS[1]  # in-plane voxel spacing, may need to swap with below
+        # self.index2CoordA[:3,0] = IOP[:3]*PS[0]  # in-plane voxel spacing
 
+        # # if feet first
+        # # You should also flip the stack Z if FFS, but we don't do that here
+        # FF = self.stack.info.get('PatientPosition', self.DEFAULT_PATIENT_POSITION)
+        # if FF=='FFS':
+        #     self.index2CoordA[:3,2] = -(T1-TN)/(1-NSlices)  # slice spacing
+        #     self.index2CoordA[:3,3] = TN  # last column
+        # else:
+        #     self.index2CoordA[:3,2] = (T1-TN)/(1-NSlices)  # slice spacing
+        #     self.index2CoordA[:3,3] = T1  # last column
+        
         # self.coord2IndexA = inv(self.index2CoordA)
 
-        self.index2CoordA, self.coord2IndexA = series_affines(self.stack)
+        self.index2CoordA, self.coord2IndexA = series_affines(
+            self.stack, default_patient_position=self.DEFAULT_PATIENT_POSITION
+            )
 
     #==================================================================#
     def testPixelSpacing(self, slice):
@@ -514,7 +536,7 @@ class Scan:
 
     def index2Coord( self, I, negSpacing=False, zShift=False ):
         
-        if self._useCoord2IndexMat:
+        if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
             _inds = scipy.pad(I.T, ((0,1),(0,0)), 'constant', constant_values=1)
             return scipy.dot(self.index2CoordA, _inds)[:3,:].T
@@ -538,10 +560,13 @@ class Scan:
         and self.voxelOrigin
         """
         
-        if self._useCoord2IndexMat:
+        if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
-            _x = scipy.pad(X.T, ((0,1),(0,0)), 'constant', constant_values=1)
-            return scipy.dot(self.coord2IndexA, _x)[:3,:].T
+            ind = scipy.pad(X.T, ((0,1),(0,0)), 'constant', constant_values=1)
+            ind = scipy.dot(self.coord2IndexA, ind)[:3,:].T
+            if roundInt:
+                ind = scipy.around(ind).astype(int)
+            return ind
         else:
             # return (p / self.voxelSpacing) + self.voxelOffset
             if negSpacing:
@@ -930,6 +955,14 @@ class Scan:
         """
         self.I = zoom( self.I, scale, order=order )
         print('New image shape: {}'.format(self.I.shape))
+
+        self.voxelSpacing = np.array(self.voxelSpacing)/scale
+        if self.USE_DICOM_AFFINE:
+            self.index2CoordA[0,0] = self.index2CoordA[0,0]/scale
+            self.index2CoordA[1,1] = self.index2CoordA[1,1]/scale
+            self.index2CoordA[2,2] = self.index2CoordA[2,2]/scale
+            self.coord2IndexA = inv(self.index2CoordA)
+
         self._updateI()
         return
     
@@ -940,7 +973,21 @@ class Scan:
             newScan = Scan(str(self.name)+'_downscaled_{}-{}-{}'.format(*factors))
             newVoxelSpacing = scipy.array(self.voxelSpacing)*scipy.array(factors)
             newVoxelOrigin = scipy.array(self.voxelOrigin)
-            newScan.setImageArray(I, newVoxelSpacing, newVoxelOrigin)
+
+            if self.USE_DICOM_AFFINE:
+                newScan.USE_DICOM_AFFINE = True
+                i2cmat = self.index2CoordA.copy()  # origin (4th col) is the same
+                i2cmat[0,0] = self.index2CoordA[0,0]*factors[0]
+                i2cmat[1,1] = self.index2CoordA[1,1]*factors[1]
+                i2cmat[2,2] = self.index2CoordA[2,2]*factors[2]
+                c2imat = inv(i2cmat)
+            else:
+                i2cmat = c2imat = None
+
+            newScan.setImageArray(
+                I, newVoxelSpacing, newVoxelOrigin, i2cmat=i2cmat, c2imat=c2imat
+                )
+
             return newScan
         else:
             self.I = downscale_local_mean(self.I, factors, cval, clip)
@@ -2015,7 +2062,7 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     cropOffset = scipy.array([minx, miny, minz])
     if not negSpacing:
         if zShift:
-            zCorrection = scan.voxelSpacing[2] * scipy.array([ 0.0, 0.0, (maxz-minz-scan.I.shape[2]) ])
+            zCorrection = scan.voxelSpacing[2] * scipy.array([0.0, 0.0, (maxz-minz-scan.I.shape[2])])
         else:
             zCorrection = [0,0,0]
     else:
@@ -2026,19 +2073,30 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     newScanOrigin = scan.voxelOrigin + offsetXYCoeff*cropOffset*scan.voxelSpacing + zCorrection
     # newScanOrigin = scan.voxelOrigin - (cropOffset + [maxx-minx, maxy-miny,0])*scan.voxelSpacing
 
+    # calculate new affine matrices
+    if scan.USE_DICOM_AFFINE:
+        i2cmat = scan.index2CoordA.copy()
+        i2cmat[:3,3] = scan.index2Coord(scipy.array([cropOffset,])).squeeze()
+        c2imat = inv(i2cmat)
+    else:
+        i2cmat = None
+        c2imat = None
+
     if croppedName==None:
         if scan.name is None:
             croppedName = 'cropped'
         else:
             croppedName = scan.name+'_cropped'
     croppedScan = Scan(croppedName)
+    croppedScan.USE_DICOM_AFFINE = scan.USE_DICOM_AFFINE
     croppedScan.isMasked = scan.isMasked
-    croppedScan.setImageArray(scan.I[minx:maxx,
-                                     miny:maxy,
-                                     minz:maxz],
-                              voxelSpacing=scan.voxelSpacing,
-                              voxelOrigin=newScanOrigin,
-                              )
+    croppedScan.setImageArray(
+        scan.I[minx:maxx, miny:maxy, minz:maxz],
+        voxelSpacing=scan.voxelSpacing,
+        voxelOrigin=newScanOrigin,
+        i2cmat=i2cmat,
+        c2imat=c2imat,
+        )
 
     # croppedScan.setImageArray(scan.I[minx:maxx,
     #                                miny:maxy,

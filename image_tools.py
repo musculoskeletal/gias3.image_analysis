@@ -155,6 +155,27 @@ def load_series(folder, filepat=None, suid=None, readall=False):
         ret_series = series
 
     return ret_series
+
+def series_affines(self, stack):
+    """
+    Returns the index 2 coordinates and vice versa affine matrix for a dicom series
+    """
+    IPP = scipy.array([float(x) for x in stack.info.ImagePositionPatient])
+    IOP = scipy.array([float(x) for x in stack.info.ImageOrientationPatient])
+    PS = scipy.array([float(x) for x in stack.info.PixelSpacing])
+    T1 = scipy.array([float(x) for x in stack._datasets[0].ImagePositionPatient])
+    TN = scipy.array([float(x) for x in stack._datasets[-1].ImagePositionPatient])
+    NSlices = stack.shape[0]
+    
+    index2CoordA = scipy.eye(4, dtype=float)
+    index2CoordA[:3,1] = IOP[3:]*PS[1]  # may need to swap with below
+    index2CoordA[:3,0] = IOP[:3]*PS[0]
+    index2CoordA[:3,2] = (T1-TN)/(1-NSlices)
+    index2CoordA[:3,3] = IPP
+
+    coord2IndexA = inv(index2CoordA)
+
+    return index2CoordA, coord2IndexA
     
 class Scan:
     """ Class for reading and limited manipulation of an image stack
@@ -195,6 +216,9 @@ class Scan:
         self.sliceTolerance = 0.0001
 
         self.isMasked = False
+
+        self.coord2IndexA = None
+        self.index2CoordA = None
         
     #==================================================================#
     def __del__(self):
@@ -433,21 +457,22 @@ class Scan:
         # TO BE INTEGRATED FULLY
         #=====================================================================#
         
-        IPP = scipy.array([float(x) for x in self.stack.info.ImagePositionPatient])
-        IOP = scipy.array([float(x) for x in self.stack.info.ImageOrientationPatient])
-        PS = scipy.array([float(x) for x in self.stack.info.PixelSpacing])
-        T1 = scipy.array([float(x) for x in self.stack._datasets[0].ImagePositionPatient])
-        TN = scipy.array([float(x) for x in self.stack._datasets[-1].ImagePositionPatient])
-        NSlices = self.stack.shape[0]
+        # IPP = scipy.array([float(x) for x in self.stack.info.ImagePositionPatient])
+        # IOP = scipy.array([float(x) for x in self.stack.info.ImageOrientationPatient])
+        # PS = scipy.array([float(x) for x in self.stack.info.PixelSpacing])
+        # T1 = scipy.array([float(x) for x in self.stack._datasets[0].ImagePositionPatient])
+        # TN = scipy.array([float(x) for x in self.stack._datasets[-1].ImagePositionPatient])
+        # NSlices = self.stack.shape[0]
         
-        self.index2CoordA = scipy.eye(4, dtype=float)
-        self.index2CoordA[:3,1] = IOP[3:]*PS[1]  # may need to swap with below
-        self.index2CoordA[:3,0] = IOP[:3]*PS[0]
-        self.index2CoordA[:3,2] = (T1-TN)/(1-NSlices)
-        self.index2CoordA[:3,3] = IPP
+        # self.index2CoordA = scipy.eye(4, dtype=float)
+        # self.index2CoordA[:3,1] = IOP[3:]*PS[1]  # may need to swap with below
+        # self.index2CoordA[:3,0] = IOP[:3]*PS[0]
+        # self.index2CoordA[:3,2] = (T1-TN)/(1-NSlices)
+        # self.index2CoordA[:3,3] = IPP
 
-        self.coord2IndexA = inv(self.index2CoordA)
-        
+        # self.coord2IndexA = inv(self.index2CoordA)
+
+        self.index2CoordA, self.coord2IndexA = series_affines(self.stack)
 
     #==================================================================#
     def testPixelSpacing(self, slice):

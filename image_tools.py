@@ -955,13 +955,15 @@ class Scan:
     
     #==================================================================#    
     def zoom( self, scale, order=3 ):
-        """ uses scipy.ndimage.zoom to scale self.I isotropically by 
-        scale factor scale.
         """
-        self.I = zoom( self.I, scale, order=order )
+        Uses scipy.ndimage.zoom to scale self.I by.
+
+        Scale can either be scalar (isotropic) or a list (orthotropic)
+        """
+        self.I = zoom(self.I, scale, order=order)
         print('New image shape: {}'.format(self.I.shape))
 
-        self.voxelSpacing = np.array(self.voxelSpacing)/scale
+        self.voxelSpacing = scipy.array(self.voxelSpacing)/scale
         if self.USE_DICOM_AFFINE:
             # self.index2CoordA[0,0] = self.index2CoordA[0,0]/scale
             # self.index2CoordA[1,1] = self.index2CoordA[1,1]/scale
@@ -969,9 +971,7 @@ class Scan:
             # self.coord2IndexA = inv(self.index2CoordA)
 
             tmat = scipy.eye(3)
-            tmat[0,0] = 1.0/scale
-            tmat[1,1] = 1.0/scale
-            tmat[2,2] = 1.0/scale
+            tmat[[0,1,2],[0,1,2]] = 1.0/scipy.array(scale)
             self.index2CoordA[:3,:3] = scipy.dot(tmat, self.index2CoordA[:3,:3])
             self.coord2IndexA = inv(self.index2CoordA)
 
@@ -995,9 +995,7 @@ class Scan:
                 # c2imat = inv(i2cmat)
 
                 tmat = scipy.eye(3)
-                tmat[0,0] = factors[0]
-                tmat[1,1] = factors[1]
-                tmat[2,2] = factors[2]
+                tmat[[0,1,2],[0,1,2]] = factors
                 i2cmat = scipy.array(self.index2CoordA)
                 i2cmat[:3,:3] = scipy.dot(tmat, i2cmat[:3,:3])
                 c2imat = inv(i2cmat)

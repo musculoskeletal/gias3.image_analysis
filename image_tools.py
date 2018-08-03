@@ -168,21 +168,22 @@ def series_affines(stack, default_patient_position='FFS'):
     NSlices = stack.shape[0]
     
     index2CoordA = scipy.eye(4, dtype=float)
-    index2CoordA[:3,1] = IOP[3:]*PS[1]  # in-plane voxel spacing, may need to swap with below
-    index2CoordA[:3,0] = IOP[:3]*PS[0]  # in-plane voxel spacing
-
+    index2CoordA[:3,1] = IOP[3:]*PS[1]  # in-plane voxel spacing along a row
+    index2CoordA[:3,0] = IOP[:3]*PS[0]  # in-plane voxel spacing along a column
+    index2CoordA[:3,2] = (TN-T1)/(NSlices-1)  # average slice spacing from 1st to last
+    index2CoordA[:3,3] = T1  # last column
+    
     # if feet first
     # You should also flip the stack Z if FFS, but we don't do that here
-    FF = stack.info.get('PatientPosition', default_patient_position)
-    if FF=='FFS':
-        index2CoordA[:3,2] = -(T1-TN)/(1-NSlices)  # slice spacing
-        index2CoordA[:3,3] = TN  # last column
-    else:
-        index2CoordA[:3,2] = (T1-TN)/(1-NSlices)  # slice spacing
-        index2CoordA[:3,3] = T1  # last column
+    # FF = stack.info.get('PatientPosition', default_patient_position)
+    # if FF=='FFS':
+    #     index2CoordA[:3,2] = -(T1-TN)/(1-NSlices)  # slice spacing
+    #     index2CoordA[:3,3] = TN  # last column
+    # else:
+    #     index2CoordA[:3,2] = (T1-TN)/(1-NSlices)  # slice spacing
+    #     index2CoordA[:3,3] = T1  # last column
 
     coord2IndexA = inv(index2CoordA)
-
     return index2CoordA, coord2IndexA
     
 class Scan:
@@ -443,9 +444,13 @@ class Scan:
         # load stack
         print(('Loading {} slices.'.format(len(files))))
         try:
-            self.stack = dicomSeries.read_files( files, showProgress=True, readPixelData=True, force=True)[0]
+            self.stack = dicomSeries.read_files(
+                files, showProgress=True, readPixelData=True, force=True
+                )[0]
         except TypeError:
-            self.stack = dicomSeries.read_files( files, showProgress=True, readPixelData=True)[0]
+            self.stack = dicomSeries.read_files(
+                files, showProgress=True, readPixelData=True
+                )[0]
         
         self.I = self.stack.get_pixel_array().astype(scipy.int16)
         self.info = self.stack.info
@@ -958,9 +963,16 @@ class Scan:
 
         self.voxelSpacing = np.array(self.voxelSpacing)/scale
         if self.USE_DICOM_AFFINE:
-            self.index2CoordA[0,0] = self.index2CoordA[0,0]/scale
-            self.index2CoordA[1,1] = self.index2CoordA[1,1]/scale
-            self.index2CoordA[2,2] = self.index2CoordA[2,2]/scale
+            # self.index2CoordA[0,0] = self.index2CoordA[0,0]/scale
+            # self.index2CoordA[1,1] = self.index2CoordA[1,1]/scale
+            # self.index2CoordA[2,2] = self.index2CoordA[2,2]/scale
+            # self.coord2IndexA = inv(self.index2CoordA)
+
+            tmat = scipy.eye(3)
+            tmat[0,0] = 1.0/scale
+            tmat[1,1] = 1.0/scale
+            tmat[2,2] = 1.0/scale
+            self.index2CoordA[:3,:3] = scipy.dot(tmat, self.index2CoordA[:3,:3])
             self.coord2IndexA = inv(self.index2CoordA)
 
         self._updateI()
@@ -976,10 +988,18 @@ class Scan:
 
             if self.USE_DICOM_AFFINE:
                 newScan.USE_DICOM_AFFINE = True
-                i2cmat = self.index2CoordA.copy()  # origin (4th col) is the same
-                i2cmat[0,0] = self.index2CoordA[0,0]*factors[0]
-                i2cmat[1,1] = self.index2CoordA[1,1]*factors[1]
-                i2cmat[2,2] = self.index2CoordA[2,2]*factors[2]
+                # i2cmat = self.index2CoordA.copy()  # origin (4th col) is the same
+                # i2cmat[0,0] = self.index2CoordA[0,0]*factors[0]
+                # i2cmat[1,1] = self.index2CoordA[1,1]*factors[1]
+                # i2cmat[2,2] = self.index2CoordA[2,2]*factors[2]
+                # c2imat = inv(i2cmat)
+
+                tmat = scipy.eye(3)
+                tmat[0,0] = factors[0]
+                tmat[1,1] = factors[1]
+                tmat[2,2] = factors[2]
+                i2cmat = scipy.array(self.index2CoordA)
+                i2cmat[:3,:3] = scipy.dot(tmat, i2cmat[:3,:3])
                 c2imat = inv(i2cmat)
             else:
                 i2cmat = c2imat = None

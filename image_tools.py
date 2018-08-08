@@ -539,6 +539,14 @@ class Scan:
     #       X[:,2] -= self.I.shape[2]*self.voxelSpacing[2]
     #   return X    
 
+    def set_i2c_mat(self, m):
+        self.index2CoordA = np.array(m)
+        self.coord2IndexA = inv(self.index2CoordA)
+
+    def set_c2i_mat(self, m):
+        self.coord2IndexA = np.array(m)
+        self.index2CoordA = inv(self.coord2IndexA)
+
     def index2Coord( self, I, negSpacing=False, zShift=False ):
         
         if self.USE_DICOM_AFFINE:

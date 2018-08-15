@@ -34,7 +34,8 @@ try:
     import dicom.contrib.pydicom_series as dicomSeries
 except ImportError:
     import pydicom as dicom
-    import pydicom.contrib.pydicom_series as dicomSeries
+    # import pydicom.contrib.pydicom_series as dicomSeries
+    from gias2.image_analysis import dicom_series as dicomSeries
 import os
 import sys
 

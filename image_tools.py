@@ -1020,8 +1020,15 @@ class Scan:
             self.I = downscale_local_mean(self.I, factors, cval, clip)
             print('New image shape: {}'.format(self.I.shape))
             self._updateI()
-            for i in range(len(self.voxelSpacing)):
-                self.voxelSpacing[i] *= factors[i]
+            if self.USE_DICOM_AFFINE:
+                tmat = scipy.eye(3)
+                tmat[[0,1,2],[0,1,2]] = factors
+                i2cmat = scipy.array(self.index2CoordA)
+                i2cmat[:3,:3] = scipy.dot(tmat, i2cmat[:3,:3])
+                self.set_i2c_mat(i2cmat)
+            else:
+                for i in range(len(self.voxelSpacing)):
+                    self.voxelSpacing[i] *= factors[i]
 
     #==================================================================#
     def affine( self, matrix, offset=None, order=1 ): 

@@ -541,11 +541,11 @@ class Scan:
     #   return X    
 
     def set_i2c_mat(self, m):
-        self.index2CoordA = np.array(m)
+        self.index2CoordA = scipy.array(m)
         self.coord2IndexA = inv(self.index2CoordA)
 
     def set_c2i_mat(self, m):
-        self.coord2IndexA = np.array(m)
+        self.coord2IndexA = scipy.array(m)
         self.index2CoordA = inv(self.coord2IndexA)
 
     def index2Coord( self, I, negSpacing=False, zShift=False ):

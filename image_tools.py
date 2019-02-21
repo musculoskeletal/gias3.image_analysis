@@ -92,6 +92,19 @@ def filterDicomPixels(dicomData):
     newPixelArray = scalePixel*(pixelArray-minPixel)
     return newPixelArray
 
+def _get_larget_series(series):
+    """
+    Return the series with the most number of slices
+    """
+    largest_series = scipy.array([0,0,0])
+    # Get the largest series 
+    for s in series:
+        # We only care about 3d array
+        if (len(s.shape)==3) and (largest_series.shape[0]<s.shape[0]):
+            largest_series = s
+
+    return largest_series
+
 def load_series(folder, filepat=None, suid=None, readall=False):
     """
     Reads DICOM files in a specified folder and returns one or more
@@ -137,8 +150,9 @@ def load_series(folder, filepat=None, suid=None, readall=False):
 
     if not readall:
         if suid is None:
-            n_slices = [s.shape[0] for s in series]
-            ret_series = series[scipy.argmax(n_slices)]
+            # n_slices = [s.shape[0] for s in series]
+            # ret_series = series[scipy.argmax(n_slices)]
+            ret_series = _get_larget_series(series)
             print('Loading largest series {}'.format(ret_series.suid))
             # print(ret_series.info.SeriesDescription)
         else:
@@ -445,13 +459,15 @@ class Scan:
         # load stack
         print(('Loading {} slices.'.format(len(files))))
         try:
-            self.stack = dicomSeries.read_files(
+            stacks = dicomSeries.read_files(
                 files, showProgress=True, readPixelData=True, force=True
-                )[0]
+                )
         except TypeError:
-            self.stack = dicomSeries.read_files(
+            stacks = dicomSeries.read_files(
                 files, showProgress=True, readPixelData=True
-                )[0]
+                )
+        # if there are multiple series, get the one with the most number of slices
+        self.stack = _get_larget_series(stacks)
         
         self.I = self.stack.get_pixel_array().astype(scipy.int16)
         self.info = self.stack.info

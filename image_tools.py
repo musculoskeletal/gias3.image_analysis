@@ -466,6 +466,9 @@ class Scan:
             stacks = dicomSeries.read_files(
                 files, showProgress=True, readPixelData=True
                 )
+        if len(stacks)==0:
+            raise RuntimeError('No series could read from {} files'.format(len(files)))
+
         # if there are multiple series, get the one with the most number of slices
         self.stack = _get_larget_series(stacks)
         

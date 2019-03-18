@@ -14,8 +14,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import glob
 import scipy
-from gias2.registration import alignment_analytic
-# from gias.common import vtkRender
+
 from scipy.linalg import eigh, inv
 from scipy.optimize import leastsq, fmin
 from scipy.spatial.distance import euclidean
@@ -44,6 +43,11 @@ try:
     from matplotlib import cm
 except ImportError:
     print('Matplotlib not found, 2-D visualisation will be disabled')
+
+from gias2.registration import alignment_analytic
+from gias2.common import geoprimitives
+# from gias.common import vtkRender
+
 
 class NoScanError(Exception):
     pass
@@ -759,19 +763,61 @@ class Scan:
             print('ERROR: Scan.createSubSlice: invalid slice number (', str(number), ') in axis', str(axis))
             return 
         elif axis == 0:
-            return slice( self.I[number, :, :], number, axis )
+            return Slice( self.I[number, :, :], number, axis )
         elif axis == 1:
-            return slice( self.I[:, number, :], number, axis )
+            return Slice( self.I[:, number, :], number, axis )
         elif axis == 2:
-            return slice( self.I[:, :, number], number, axis )
+            return Slice( self.I[:, :, number], number, axis )
         else:
             print('ERROR: Scan.createSubSlice: invalid axis', str(axis))
             return
+
+    def createSubSliceFromPlane(self, plane, slice_shape, res, maptoindices=True, order=1):
+        """
+        Generate a Slice in the given plane.
+
+        :param plane: Plane instance defining the slice plane.
+        :param slice_shape: 2-tuple giving the slice shape in number of pixels
+        :param res: 2-tuple giving the slice pixel size
+        :param maptoindices: bool, True is plane and res is defined in world coordinates
+        :param order: interpolation order
+        :return: a Slice instance of the image slice
+        """
+
+        # create a sample grid centered about origin
+        # these are in the plane's local 2D coordinates
+        w, h = scipy.array(slice_shape) * scipy.array(res)
+        sgrid_i = scipy.linspace(-w / 2.0, (w / 2.0)-res[0], slice_shape[0])
+        sgrid_j = scipy.linspace(-h / 2.0, (h / 2.0)-res[1], slice_shape[1])
+        sgrid_ij = scipy.meshgrid(sgrid_i, sgrid_j)
+        sgrid_xy = scipy.vstack([
+            sgrid_ij[0].ravel(),
+            sgrid_ij[1].ravel(),
+        ]).T
+
+        # map 2D sampling coordinates to 3D
+        sgrid_3d = plane.plane2Dto3D(sgrid_xy)
+
+        # map 3D sampline coordinates to scan index space
+        if maptoindices:
+            sgrid_3d = self.coord2Index(sgrid_3d, roundInt=False)
+
+        # sample scan
+        samples = self.sampleImage(
+            sgrid_3d, maptoindices=False, order=order
+        )
+        slice_img = samples.reshape(slice_shape)
+        slice = Slice(slice_img, None, None, origin=plane.O, normal=plane.N)
+
+        return slice, sgrid_3d
 
     #==================================================================#    
     def createSubSliceNormal( self, P, N, sliceShape=(100,100), order=3 ):
         """ returns image slice given a centre point P and normal vector N
         """
+
+        # create a plane with the given P and N
+        slice_plane = geoprimitives.Plane(P, N)
         
         # reverse hack, not sure why 
         #~ P = scipy.array(P)[::-1]
@@ -809,7 +855,7 @@ class Scan:
         sliceArray = map_coordinates( self.I, sliceCoords, order=order )
         sliceImage = scipy.reshape( sliceArray, sliceShape )
         
-        return slice( sliceImage, None, None, origin=P, normal=N )
+        return Slice( sliceImage, None, None, origin=P, normal=N )
         
     #==================================================================#
     def calculateSubVolumeCoMs(self):
@@ -1535,7 +1581,7 @@ class phantomSampler(object):
             
 #======================================================================#
 #======================================================================#
-class slice:
+class Slice:
     """ 2D image class
     """
     def __init__(self, image, number, axis, origin=None, normal=None ):
@@ -1551,7 +1597,7 @@ class slice:
         self.R = None
         self.theta = None
                 
-        if ( self.origin != None ) and ( self.normal != None ):
+        if ( self.origin is not None ) and ( self.normal is not None ):
             self._calc3DAxes()
             
     #==================================================================#

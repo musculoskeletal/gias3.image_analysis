@@ -82,7 +82,6 @@ class ProgressOutput:
 def filterDicomPixels(dicomData):
     pixelArray = dicomData.pixel_array
 
-    # Set values < 0 to 0
     ii = pixelArray < 0
     pixelArray[ii] = 0
         
@@ -278,8 +277,16 @@ class Scan:
         # self.renderer = vtkRender.VtkImageVolumeRenderer( self.I )
         # self.renderer.setCoM( self.CoM, self.pAxes, self.pAxesMag )
 
-        self.index2CoordA = i2cmat
-        self.coord2IndexA = c2imat
+        if (i2cmat is not None) and (c2imat is not None):
+            self.index2CoordA = i2cmat
+            self.coord2IndexA = c2imat
+            self.USE_DICOM_AFFINE = True
+        elif i2cmat is not None:
+            self.set_i2c_mat(i2cmat)
+        elif c2imat is not None:
+            self.set_c2i_mat(c2imat)
+        else:
+            pass
         
         return
 
@@ -566,10 +573,12 @@ class Scan:
     def set_i2c_mat(self, m):
         self.index2CoordA = scipy.array(m)
         self.coord2IndexA = inv(self.index2CoordA)
+        self.USE_DICOM_AFFINE = True
 
     def set_c2i_mat(self, m):
         self.coord2IndexA = scipy.array(m)
         self.index2CoordA = inv(self.coord2IndexA)
+        self.USE_DICOM_AFFINE = True
 
     def index2Coord( self, I, negSpacing=False, zShift=False ):
         

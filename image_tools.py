@@ -485,6 +485,7 @@ class Scan:
         
         self.I = self.stack.get_pixel_array().astype(scipy.int16)
         self.info = self.stack.info
+        self.sliceLocations = [float(s.SliceLocation) for s in self.stack._datasets]
         
         #======================================================#
         # set axes to be l-r, a-p, s-i
@@ -497,36 +498,6 @@ class Scan:
             self.voxelSpacing[2] = sliceSpacingOveride
         self.voxelOrigin = scipy.array(self.stack.info.ImagePositionPatient)
         # self.voxelOffset = self.voxelOrigin - (-1.0*self.voxelSpacing)*self.I.shape
-
-        # self.stack = stack
-
-        #=====================================================================#
-        # Coordinate transform affine matrix
-        # TO BE INTEGRATED FULLY
-        #=====================================================================#
-        
-        # IPP = scipy.array([float(x) for x in self.stack.info.ImagePositionPatient])
-        # IOP = scipy.array([float(x) for x in self.stack.info.ImageOrientationPatient])
-        # PS = scipy.array([float(x) for x in self.stack.info.PixelSpacing])
-        # T1 = scipy.array([float(x) for x in self.stack._datasets[0].ImagePositionPatient])
-        # TN = scipy.array([float(x) for x in self.stack._datasets[-1].ImagePositionPatient])
-        # NSlices = self.stack.shape[0]
-        
-        # self.index2CoordA = scipy.eye(4, dtype=float)
-        # self.index2CoordA[:3,1] = IOP[3:]*PS[1]  # in-plane voxel spacing, may need to swap with below
-        # self.index2CoordA[:3,0] = IOP[:3]*PS[0]  # in-plane voxel spacing
-
-        # # if feet first
-        # # You should also flip the stack Z if FFS, but we don't do that here
-        # FF = self.stack.info.get('PatientPosition', self.DEFAULT_PATIENT_POSITION)
-        # if FF=='FFS':
-        #     self.index2CoordA[:3,2] = -(T1-TN)/(1-NSlices)  # slice spacing
-        #     self.index2CoordA[:3,3] = TN  # last column
-        # else:
-        #     self.index2CoordA[:3,2] = (T1-TN)/(1-NSlices)  # slice spacing
-        #     self.index2CoordA[:3,3] = T1  # last column
-        
-        # self.coord2IndexA = inv(self.index2CoordA)
 
         self.index2CoordA, self.coord2IndexA = series_affines(
             self.stack, default_patient_position=self.DEFAULT_PATIENT_POSITION
@@ -558,7 +529,31 @@ class Scan:
             print('Warning: Inconsistent pixel or slice spacing ', dPixel, ' ', dSlice)
             
         self._previousSliceLocation = slice.SliceLocation
-    
+
+    def orderSliceByLocation(self, order='ascending'):
+        """
+        Reorder slice by their slice location.
+
+        Parameters
+        ----------
+        order : str
+            'ascending' or 'descending'
+
+        Returns
+        -------
+        None
+        """
+
+        if order not in ('ascending', 'descending'):
+            raise ValueError('Invalid order {}'.format(order))
+        elif self.sliceLocations is None:
+            raise RuntimeError('Scan has no sliceLocation attribute')
+        else:
+            if order == 'ascending':
+                self.I = self.I[:, :, scipy.argsort(self.sliceLocations)]
+            else:
+                self.I = self.I[:, :, scipy.argsort(self.sliceLocations)[::-1]]
+
     #==================================================================#
     # def index2CoordOld( self, I, negSpacing=False, zShift=False ):
     #   if negSpacing:

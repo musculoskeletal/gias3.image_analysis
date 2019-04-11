@@ -403,21 +403,14 @@ class Scan:
         
         poLoad = ProgressOutput("Loading scan", len(files))
         self.sliceLocations = scipy.zeros(len(files), dtype=float)
-        noSliceLocation = False
         for sl, f in enumerate(files):
             try:
                 slice = dicom.read_file(os.path.join(self.read_folder, f), force=True)
             except TypeError:
                 slice = dicom.read_file(os.path.join(self.read_folder, f))
 
-            if not hasattr(slice, "SliceLocation"):
-                print('WARNING: scan contains slices with no SliceLocation')
-                self.sliceLocations = None
-                noSliceLocation = True
-            else:
-                if not noSliceLocation:
-                    self.testPixelSpacing(slice)
-                    self.sliceLocations[sl] = float(slice.SliceLocation)
+            self.testPixelSpacing(slice)
+            self.sliceLocations[sl] = float(slice.ImagePositionPatient[2])
 
             if filter:
                 self.I[:,:,sl] = filterDicomPixels(slice)
@@ -499,7 +492,8 @@ class Scan:
         try:
             self.sliceLocations = [float(s.SliceLocation) for s in self.stack._datasets]
         except AttributeError:
-            print('WARNING: no slice location in stack')
+            print('WARNING: no slice location in stack, falling back to ImagePositionPatient')
+            self.sliceLocations = [float(s.ImagePositionPatient[2]) for s in self.stack._datasets]
 
         #======================================================#
         # set axes to be l-r, a-p, s-i
@@ -524,28 +518,29 @@ class Scan:
     def testPixelSpacing(self, slice):
         
         dSlice = 0
+        sliceSliceLocation = float(slice.ImagePositionPatient[2])
         
         if self.pixelSpacing==None:
             self.pixelSpacing = slice.PixelSpacing
             self.pixelTolerance = 0.0001*self.pixelSpacing[0];
             
         if self._previousSliceLocation==None:
-            self._previousSliceLocation = slice.SliceLocation
+            self._previousSliceLocation = sliceSliceLocation
         elif self.sliceSpacing==None:
-            self.sliceSpacing = slice.SliceLocation-self._previousSliceLocation
+            self.sliceSpacing = sliceSliceLocation-self._previousSliceLocation
             self.sliceTolerance = 0.0001*self.sliceSpacing;
         
         dPixel = scipy.absolute([slice.PixelSpacing[0]-self.pixelSpacing[0], \
                 slice.PixelSpacing[1]-self.pixelSpacing[1]])
         
         if self.sliceSpacing:
-            dSlice = scipy.absolute((slice.SliceLocation-self._previousSliceLocation)-self.sliceSpacing)
+            dSlice = scipy.absolute((sliceSliceLocation-self._previousSliceLocation)-self.sliceSpacing)
             
         if dPixel[0]>self.pixelTolerance or dPixel[1]>self.pixelTolerance \
                 or dSlice>self.sliceTolerance:
             print('Warning: Inconsistent pixel or slice spacing ', dPixel, ' ', dSlice)
             
-        self._previousSliceLocation = slice.SliceLocation
+        self._previousSliceLocation = sliceSliceLocation
 
     def orderSliceByLocation(self, order='ascending'):
         """

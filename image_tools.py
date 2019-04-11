@@ -403,21 +403,31 @@ class Scan:
         
         poLoad = ProgressOutput("Loading scan", len(files))
         self.sliceLocations = scipy.zeros(len(files), dtype=float)
+        noSliceLocation = False
         for sl, f in enumerate(files):
             try:
                 slice = dicom.read_file(os.path.join(self.read_folder, f), force=True)
             except TypeError:
                 slice = dicom.read_file(os.path.join(self.read_folder, f))
-            self.testPixelSpacing(slice)
+
+            if not hasattr(slice, "SliceLocation"):
+                print('WARNING: scan contains slices with no SliceLocation')
+                self.sliceLocations = None
+                noSliceLocation = True
+            else:
+                if not noSliceLocation:
+                    self.testPixelSpacing(slice)
+                    self.sliceLocations[sl] = float(slice.SliceLocation)
+
             if filter:
                 self.I[:,:,sl] = filterDicomPixels(slice)
             else:
                 self.I[:,:,sl] = slice.pixel_array.copy()
-            self.sliceLocations[sl] = float(slice.SliceLocation)
+
             poLoad.progress(sl+1)
         
         self.sliceLast = slice
-        poLoad.output("{}: {} slices loaded".format(self.read_folder,sl))
+        poLoad.output("{}: {} slices loaded".format(self.read_folder, sl))
 
         # reorder slices by slice location
         self.I = self.I[:,:, scipy.argsort(self.sliceLocations)]
@@ -485,8 +495,12 @@ class Scan:
         
         self.I = self.stack.get_pixel_array().astype(scipy.int16)
         self.info = self.stack.info
-        self.sliceLocations = [float(s.SliceLocation) for s in self.stack._datasets]
-        
+
+        try:
+            self.sliceLocations = [float(s.SliceLocation) for s in self.stack._datasets]
+        except AttributeError:
+            print('WARNING: no slice location in stack')
+
         #======================================================#
         # set axes to be l-r, a-p, s-i
         self.I = self.I.transpose( [2,1,0] )        # original
@@ -502,6 +516,9 @@ class Scan:
         self.index2CoordA, self.coord2IndexA = series_affines(
             self.stack, default_patient_position=self.DEFAULT_PATIENT_POSITION
             )
+
+        print('scan voxelSpacing: {}'.format(self.voxelSpacing))
+        print('scan ic2 matrix: {}'.format(self.index2CoordA))
 
     #==================================================================#
     def testPixelSpacing(self, slice):
@@ -544,15 +561,19 @@ class Scan:
         None
         """
 
-        if order not in ('ascending', 'descending'):
-            raise ValueError('Invalid order {}'.format(order))
-        elif self.sliceLocations is None:
-            raise RuntimeError('Scan has no sliceLocation attribute')
+        if self.sliceLocations is None:
+            print('WARNING: no slice location in scan, cannot order by location')
+            return
         else:
-            if order == 'ascending':
-                self.I = self.I[:, :, scipy.argsort(self.sliceLocations)]
+            if order not in ('ascending', 'descending'):
+                raise ValueError('Invalid order {}'.format(order))
+            elif self.sliceLocations is None:
+                raise RuntimeError('Scan has no sliceLocation attribute')
             else:
-                self.I = self.I[:, :, scipy.argsort(self.sliceLocations)[::-1]]
+                if order == 'ascending':
+                    self.I = self.I[:, :, scipy.argsort(self.sliceLocations)]
+                else:
+                    self.I = self.I[:, :, scipy.argsort(self.sliceLocations)[::-1]]
 
     #==================================================================#
     # def index2CoordOld( self, I, negSpacing=False, zShift=False ):

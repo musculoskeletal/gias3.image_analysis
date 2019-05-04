@@ -797,8 +797,8 @@ class Scan:
         Generate a Slice in the given plane.
 
         :param plane: Plane instance defining the slice plane.
-        :param slice_shape: 2-tuple giving the slice shape in number of pixels
-        :param res: 2-tuple giving the slice pixel size
+        :param slice_shape: 2-tuple giving the slice shape in number of pixels (H, W)
+        :param res: 2-tuple giving the slice pixel size (H, W)
         :param maptoindices: bool, True is plane and res is defined in world coordinates
         :param order: interpolation order
         :return: a Slice instance of the image slice
@@ -806,13 +806,13 @@ class Scan:
 
         # create a sample grid centered about origin
         # these are in the plane's local 2D coordinates
-        w, h = scipy.array(slice_shape) * scipy.array(res)
-        sgrid_i = scipy.linspace(-w / 2.0, (w / 2.0)-res[0], slice_shape[0])
-        sgrid_j = scipy.linspace(-h / 2.0, (h / 2.0)-res[1], slice_shape[1])
+        h, w = scipy.array(slice_shape) * scipy.array(res)
+        sgrid_i = scipy.linspace(-h / 2.0, (h / 2.0)-res[0], slice_shape[0])
+        sgrid_j = scipy.linspace(-w / 2.0, (w / 2.0)-res[1], slice_shape[1])
         sgrid_ij = scipy.meshgrid(sgrid_i, sgrid_j)
         sgrid_xy = scipy.vstack([
-            sgrid_ij[0].ravel(),
             sgrid_ij[1].ravel(),
+            sgrid_ij[0].ravel(),
         ]).T
 
         # map 2D sampling coordinates to 3D
@@ -826,7 +826,7 @@ class Scan:
         samples = self.sampleImage(
             sgrid_3d, maptoindices=False, order=order
         )
-        slice_img = samples.reshape(slice_shape)
+        slice_img = samples.reshape(slice_shape[::-1]).T
         slice = Slice(slice_img, None, None, origin=plane.O, normal=plane.N)
 
         return slice, sgrid_3d

@@ -542,45 +542,78 @@ class Scan:
             
         self._previousSliceLocation = sliceSliceLocation
 
-    def orderSliceByLocation(self, order='ascending'):
+    def reorder_slices_by_location(self, order, use_slice_location):
         """
-        Reorder slice by their slice location.
+        Reorder slice by their z position. This will reorder in place
+          - self.stack._datasets
+          - self.I in the 3rd axis
+          - the affine matrices if slice order was inverted
+
+        Inversion is checked by seeing if the 1st slice has been moved to
+        the last slice. If this happens, the affine matrix
 
         Parameters
         ----------
         order : str
             'ascending' or 'descending'
+        use_slice_location : bool
+            If true, uses the SliceLocation field of slices if it exists.
+            Else uses the 3rd component of ImagePositionPatient.
 
         Returns
         -------
-        None
+        flipped : bool
+            If the slice ordering was flipped
         """
 
-        if self.sliceLocations is None:
-            print('WARNING: no slice location in scan, cannot order by location')
-            return
+        if len(self.stack._datasets) == 0:
+            raise AttributeError('No slices in scan, cannot reorder')
+
+        if self.I is None:
+            raise AttributeError('No image array in scan, cannot reorder')
+
+        if order not in ('ascending', 'descending'):
+            raise ValueError('Invalid order {}'.format(order))
+
+        if use_slice_location:
+            try:
+                slice_locations = [float(s.SliceLocation) for s in self.stack._datasets]
+            except AttributeError:
+                raise AttributeError('SliceLocation field not found in series')
         else:
-            if order not in ('ascending', 'descending'):
-                raise ValueError('Invalid order {}'.format(order))
-            elif self.sliceLocations is None:
-                raise RuntimeError('Scan has no sliceLocation attribute')
-            else:
-                if order == 'ascending':
-                    self.I = self.I[:, :, scipy.argsort(self.sliceLocations)]
-                else:
-                    self.I = self.I[:, :, scipy.argsort(self.sliceLocations)[::-1]]
+            slice_locations = [float(s.ImagePositionPatient[2]) for s in self.stack._datasets]
 
-    #==================================================================#
-    # def index2CoordOld( self, I, negSpacing=False, zShift=False ):
-    #   if negSpacing:
-    #       X = -self.voxelSpacing*I + self.voxelOffset
-    #   else:
-    #       X = self.voxelSpacing*I + self.voxelOffset
+        sorted_args = scipy.argsort(slice_locations)
+        if order == 'descending':
+            sorted_args = sorted_args[::-1]
 
-    #   if zShift:
-    #       X[:,2] -= self.I.shape[2]*self.voxelSpacing[2]
-    #   return X    
+        # sort series slices
+        new_datasets = [self.stack._datasets[i] for i in sorted_args]
+        self.stack._datasets = new_datasets
 
+        # sort image array
+        self.I = self.I[:, :, sorted_args]
+
+        if sorted_args[0] == len(slice_locations) - 1:
+            flipped = True
+            print('Scan was flipped in Z during reordering')
+        else:
+            flipped = False
+            print('Scan was not flipped in Z during reordering')
+
+        if flipped:
+            self.flip_affine_z()
+
+        return flipped
+
+    def flip_affine_z(self):
+        """
+        Invert the scan's affine matrix in the Z axis
+        """
+        i2c_new = series_affines(self.stack, invertz=True)[0]
+        self.set_i2c_mat(i2c_new)
+
+    # ================================================================ #
     def set_i2c_mat(self, m):
         self.index2CoordA = scipy.array(m)
         self.coord2IndexA = inv(self.index2CoordA)

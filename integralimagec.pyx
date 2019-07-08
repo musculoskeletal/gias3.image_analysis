@@ -12,6 +12,8 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ===============================================================================
 """
 
+# cython: language_level=3
+
 import numpy as np
 cimport numpy as np
 cimport cython

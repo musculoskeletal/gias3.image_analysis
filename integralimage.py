@@ -22,7 +22,11 @@ import numpy as np
 
 if USECYTHON:
     import pyximport
-    pyximport.install()
+    pyximport.install(
+        setup_args={"include_dirs": np.get_include()},
+        reload_support=True,
+        language_level=3
+    )
     from gias.image_analysis import integralimagec as IIC
 
 def makeIntegralArray2( image ):

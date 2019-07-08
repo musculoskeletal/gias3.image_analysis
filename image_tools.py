@@ -1331,7 +1331,7 @@ class Scan:
             self.setImageArray(temp)
             return 1
         else:
-            return where(self.I > lower, self.I, outsideValue)
+            return scipy.where(self.I > lower, self.I, outsideValue)
 
     # ==================================================================#
     def sampleImage(self, samplePoints, maptoindices=0, outputType=float, order=1, zShift=True, negSpacing=False):

@@ -300,6 +300,8 @@ def _getPixelDataFromDataset(ds):
         # Apply slope and offset
         _data = data*slope
         _data += offset
+    else:
+        _data = data
 
     # Done
     return _data

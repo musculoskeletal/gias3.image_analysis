@@ -14,6 +14,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 import glob
 import scipy
+from gias2.image_analysis.dicom_series import DicomSeries
 
 from scipy.linalg import eigh, inv
 from scipy.optimize import leastsq, fmin
@@ -305,6 +306,32 @@ class Scan:
             pass
 
         return
+
+    def fromDicomSeries(self, serie: DicomSeries):
+
+        # load the image array
+        voxel_array = serie.get_pixel_array().astype(scipy.int16)
+        # get transformation matrices
+        i2c_mat, c2i_mat = series_affines(serie)
+
+        # instantiate and copy properties
+        self.slice0 = serie._datasets[0]
+        self.stack = serie
+        self.info = serie.info
+
+        try:
+            self.sliceLocations = [float(s.SliceLocation) for s in serie._datasets]
+        except AttributeError:
+            print('No slice location in serie, falling back to ImagePositionPatient')
+            self.sliceLocations = [float(s.ImagePositionPatient[2]) for s in serie._datasets]
+
+        self.setImageArray(
+            voxel_array,
+            voxelSpacing=scipy.array(serie.sampling[::-1]),
+            voxelOrigin=scipy.array(serie.info.ImagePositionPatient),
+            i2cmat=i2c_mat,
+            c2imat=c2i_mat
+        )
 
     def maskImage(self, mask, fillValue=None):
 

@@ -234,7 +234,10 @@ class Scan:
         self.sV = {}  # dict of subvolume names to subvolumes
         self.I = None
         self.reader = None
+        self.read_folder = None
         self.imageType = None
+        self.stack = None
+        self.info = None
         self.slice0 = None
         self.sliceLast = None
         # self.renderer = vtkRender.VtkImageVolumeRenderer()
@@ -255,6 +258,8 @@ class Scan:
 
         self.pixelSpacing = None
         self.sliceSpacing = None
+        self.voxelSpacing = None
+        self.voxelOrigin = None
         self._previousSliceLocation = None
         self.sliceLocations = None
         self.pixelTolerance = 0.0001
@@ -340,68 +345,6 @@ class Scan:
         self.isMasked = True
 
     # ==================================================================#
-    # ~ def LoadScan(self, folder, filenameFormat, fileNumber):
-    # ~ """ loads a stack of images with numbered filenames in an array
-    # ~ representation.
-    # ~ folder: a string of the folder path
-    # ~ filenameFormat: formatted string of the image filename. e.g.
-    # ~ 'image_%04d.png'
-    # ~ fileNumber: list - [start number, end number, increment ]
-    # ~ """
-    # ~
-    # ~ self.read_folder = folder
-    # ~ self.read_filenameFormat = filenameFormat
-    # ~ self.read_file_0 = fileNumber[0]
-    # ~ self.read_file_1 = fileNumber[1]
-    # ~ self.read_file_inc = fileNumber[2]
-    # ~ self.imageType = itk.Image[itk.UC, 3]
-    # ~
-    # ~ if self.reader == None:
-    # ~ self.reader = itk.ImageSeriesReader[self.imageType].New()
-    # ~
-    # ~ self.read_file_series = itk.NumericSeriesFileNames.New()
-    # ~ self.read_file_series.SetSeriesFormat(self.read_folder+"/"+self.read_filenameFormat)
-    # ~ self.read_file_series.SetStartIndex(self.read_file_0)
-    # ~ self.read_file_series.SetEndIndex(self.read_file_1)
-    # ~ self.read_file_series.SetIncrementIndex(self.read_file_inc)
-    # ~
-    # ~ self.reader.SetFileNames(self.read_file_series.GetFileNames())
-    # ~
-    # ~ self.reader.Update()
-    # ~ self.rawImage = self.reader.GetOutput()
-    # ~ self.rawImage.SetSpacing(self.spacing)
-    # ~ print str((self.read_file_1 - self.read_file_0 + 1)/self.read_file_inc)+" image slices loaded."
-    # ~
-    # ~ self.LoadImageArray()
-    # ~ self._updateI()
-    # ~
-    # ~ return
-
-    # #==================================================================#
-    # def loadScanFolder( self, folder, suffix='.png' ):
-    #   """ Loads all .png files in the folder into an array
-    #   representation
-    #   """
-
-    #   # add /
-    #   if folder[-1] != '/':
-    #       self.read_folder = folder+'/'
-    #   else:
-    #       self.read_folder = folder
-
-    #   slice = 0
-    #   fileList = glob.glob( self.read_folder+'*'+suffix )
-    #   fileList.sort()
-
-    #   # scipy
-    #   self.I = scipy.array( [ imread( f ) for f in fileList ] ) 
-    #   print 'loaded image shape:', self.I.shape
-
-    #   self._updateI()
-
-    #   return
-
-    # ==================================================================#
     def loadDicomFolder(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None,
                         newLoadMethod=True):
         if newLoadMethod:
@@ -409,7 +352,6 @@ class Scan:
         else:
             return self.loadDicomFolderOld(folder, filter, filePattern, sliceSpacingOveride, nSlice)
 
-    # ==================================================================#
     def loadDicomFolderOld(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
 
         self.read_folder = folder
@@ -477,7 +419,6 @@ class Scan:
         self.voxelSpacing = scipy.array([self.pixelSpacing[0], self.pixelSpacing[1], self.sliceSpacing])
         self.voxelOrigin = scipy.array(self.slice0.ImagePositionPatient)
 
-    # ==================================================================#
     def loadDicomFolderNew(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
         """
         uses pydicom.contrib.pydicom_series.py.
@@ -488,24 +429,7 @@ class Scan:
 
         print('loading folder ' + folder)
         self.read_folder = folder
-
-        # Get directory list of files
-        directoryList = os.listdir(self.read_folder)
-        directoryList.sort()
-
-        # Find file pattern in directory list of files
-        reFilePattern = re.compile(filePattern, re.IGNORECASE)
-        files = []
-        for f in directoryList:
-            if reFilePattern.search(f):
-                files.append(os.path.join(self.read_folder, f))
-
-        if len(files) == 0:
-            raise IOError('No files found')
-
-        if nSlice != None:
-            print('loading {} slices'.format(nSlice))
-            files = [files[i] for i in range(nSlice)]
+        files = self.list_files(self.read_folder, filePattern, nSlice)
 
         # Open a file to get image size
         try:
@@ -557,6 +481,24 @@ class Scan:
 
         print('scan voxelSpacing: {}'.format(self.voxelSpacing))
         print('scan ic2 matrix: {}'.format(self.index2CoordA))
+
+    @staticmethod
+    def list_files(read_folder, filePattern, nSlice):
+        # Get directory list of files
+        directoryList = os.listdir(read_folder)
+        directoryList.sort()
+        # Find file pattern in directory list of files
+        reFilePattern = re.compile(filePattern, re.IGNORECASE)
+        files = []
+        for f in directoryList:
+            if reFilePattern.search(f):
+                files.append(os.path.join(read_folder, f))
+        if len(files) == 0:
+            raise IOError('No files found')
+        if nSlice is not None:
+            print('loading {} slices'.format(nSlice))
+            files = files[:nSlice]
+        return files
 
     # ==================================================================#
     def testPixelSpacing(self, slice):

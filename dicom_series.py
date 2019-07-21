@@ -143,6 +143,10 @@ def _listFiles(files, path):
             files.append(item)
 
 
+def _check_slice_distance(new_d, d, ratio):
+    return (new_d > (ratio * d)) or (new_d < (d / ratio))
+
+
 def _splitSerieIfRequired(serie, series):
     """ _splitSerieIfRequired(serie, series)
     Split the serie in multiple series if this is required.
@@ -184,12 +188,12 @@ def _splitSerieIfRequired(serie, series):
 
         # If the distance deviates more than 2x from what we've seen,
         # we can agree it's a new dataset.
-        if distance and newDist > 2.1 * distance:
+        if distance and _check_slice_distance(newDist, distance, 2.0):
             L2.append([])
             distance = 0
         else:
             # Test missing file
-            if distance and newDist > 1.5 * distance:
+            if distance and _check_slice_distance(newDist, distance, 1.5):
                 print('Warning: missing file after "%s"' % ds1.filename)
             distance = newDist
 
@@ -228,13 +232,13 @@ def _getPixelDataFromDataset(ds):
     if available. """
 
     # Get original element
-    el = dict.__getitem__(ds, pixelDataTag)
+    el = ds.get(pixelDataTag)
 
     # Get data
     data = ds.pixel_array
 
     # Remove data (mark as deferred)
-    dict.__setitem__(ds, pixelDataTag, el)
+    ds[pixelDataTag] = el
     del ds._pixel_array
 
     # Obtain slope and offset

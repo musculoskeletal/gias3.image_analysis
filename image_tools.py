@@ -12,42 +12,34 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ===============================================================================
 """
 
-import glob
-import scipy
-from gias2.image_analysis.dicom_series import DicomSeries
+import os
+import sys
 
+import scipy
 from scipy.linalg import eigh, inv
-from scipy.optimize import leastsq, fmin
+from scipy.optimize import leastsq
 from scipy.spatial.distance import euclidean
 from scipy.ndimage import rotate, affine_transform, zoom, map_coordinates, gaussian_filter1d, gaussian_filter, \
     median_filter
 from scipy.interpolate import LSQUnivariateSpline
 from scipy.stats import linregress
-# from scipy.misc import imread
-# from scipy.misc import imsave
 import numpy.ma as ma
 import re
 
 from skimage.transform import downscale_local_mean
 
-try:
-    import dicom
-    import dicom.contrib.pydicom_series as dicomSeries
-except ImportError:
-    import pydicom as dicom
-    # import pydicom.contrib.pydicom_series as dicomSeries
-    from gias2.image_analysis import dicom_series as dicomSeries
-import os
-import sys
+import pydicom
+
+from gias2.registration import alignment_analytic
+from gias2.common import geoprimitives
+from gias2.learning.PCA import PCA
+from gias2.image_analysis import dicom_series
 
 try:
     from matplotlib import pyplot as plot
     from matplotlib import cm
 except ImportError:
     print('Matplotlib not found, 2-D visualisation will be disabled')
-
-from gias2.registration import alignment_analytic
-from gias2.common import geoprimitives
 
 
 # from gias.common import vtkRender
@@ -159,24 +151,20 @@ def load_series(folder, filepat=None, suid=None, readall=False):
 
     # load series
     print(('Reading {} slices.'.format(len(files))))
-    series = dicomSeries.read_files(
+    series = dicom_series.read_files(
         files, showProgress=True, readPixelData=False
     )
 
     if not readall:
         if suid is None:
-            # n_slices = [s.shape[0] for s in series]
-            # ret_series = series[scipy.argmax(n_slices)]
             ret_series = _get_larget_series(series)
             print('Loading largest series {}'.format(ret_series.suid))
-            # print(ret_series.info.SeriesDescription)
         else:
             found_series = False
             for s in series:
                 if s.suid == suid:
                     ret_series = s
                     print('Loading series {}'.format(ret_series.suid))
-                    # print(ret_series.info.SeriesDescription)
                     found_series = True
 
             if not found_series:
@@ -312,7 +300,7 @@ class Scan:
 
         return
 
-    def fromDicomSeries(self, serie: DicomSeries):
+    def fromDicomSeries(self, serie: dicom_series.DicomSeries):
 
         # load the image array
         voxel_array = serie.get_pixel_array().astype(scipy.int16)
@@ -376,9 +364,9 @@ class Scan:
 
         # Open a file to get image size
         try:
-            slice0 = dicom.read_file(os.path.join(self.read_folder, files[0]), force=True)
+            slice0 = pydicom.dcmread(os.path.join(self.read_folder, files[0]), force=True)
         except TypeError:
-            slice0 = dicom.read_file(os.path.join(self.read_folder, files[0]))
+            slice0 = pydicom.dcmread(os.path.join(self.read_folder, files[0]))
         self.slice0 = slice0
 
         # Read images into array I
@@ -391,9 +379,9 @@ class Scan:
         self.sliceLocations = scipy.zeros(len(files), dtype=float)
         for sl, f in enumerate(files):
             try:
-                slice = dicom.read_file(os.path.join(self.read_folder, f), force=True)
+                slice = pydicom.dcmread(os.path.join(self.read_folder, f), force=True)
             except TypeError:
-                slice = dicom.read_file(os.path.join(self.read_folder, f))
+                slice = pydicom.dcmread(os.path.join(self.read_folder, f))
 
             self.testPixelSpacing(slice)
             self.sliceLocations[sl] = float(slice.ImagePositionPatient[2])
@@ -433,19 +421,19 @@ class Scan:
 
         # Open a file to get image size
         try:
-            slice0 = dicom.read_file(files[0], force=True)
+            slice0 = pydicom.dcmread(files[0], force=True)
         except TypeError:
-            slice0 = dicom.read_file(files[0])
+            slice0 = pydicom.dcmread(files[0])
         self.slice0 = slice0
 
         # load stack
         print(('Loading {} slices.'.format(len(files))))
         try:
-            stacks = dicomSeries.read_files(
+            stacks = dicom_series.read_files(
                 files, showProgress=True, readPixelData=True, force=True
             )
         except TypeError:
-            stacks = dicomSeries.read_files(
+            stacks = dicom_series.read_files(
                 files, showProgress=True, readPixelData=True
             )
         if len(stacks) == 0:
@@ -1312,18 +1300,6 @@ class Scan:
         return s
 
     # ==================================================================#
-    def ResampleImage(self, scaleFactor, inputImage=None):
-
-        if inputImage == None:
-            self.resample = Resample(self.rawImage, self.imageType, scaleFactor)
-        else:
-            self.resample = Resample(inputImage, self.imageType, scaleFactor)
-
-        self.resampledImage = self.resample.do()
-        self.resampledArray = self.GetImageArray(self.resampledImage, self.imageType)
-        print("Resampled image size =", self.resampledArray.shape)
-
-    # ==================================================================#
     # vtk visualisation                                                #
     # ==================================================================#
     # def viewVolume( self ):
@@ -1805,7 +1781,7 @@ class Slice:
         cartPoints[:, 1] = polarPoints[:, 1] * scipy.sin(polarPoints[:, 0])
 
         if coords == 'stack':
-            stackPoints = self.slice2StackCS(cartCoords)
+            stackPoints = self.slice2StackCS(cartPoints)
             return stackPoints
         elif coords == 'sliceInd':
             return cartPoints + self.CoM
@@ -1836,7 +1812,7 @@ class Slice:
         cartPoints[:, 1] = polarPoints[:, 1] * scipy.sin(polarPoints[:, 0])
 
         if coords == 'stack':
-            stackPoints = self.slice2StackCS(cartCoords)
+            stackPoints = self.slice2StackCS(cartPoints)
             return stackPoints
         elif coords == 'sliceInd':
             return cartPoints + self.CoM

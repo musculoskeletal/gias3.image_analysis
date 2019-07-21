@@ -301,11 +301,9 @@ class Scan:
         return
 
     def fromDicomSeries(self, serie: dicom_series.DicomSeries):
-
-        # load the image array
-        voxel_array = serie.get_pixel_array().astype(scipy.int16)
-        # get transformation matrices
-        i2c_mat, c2i_mat = series_affines(serie)
+        """
+        Initialise from a DicomSeries
+        """
 
         # instantiate and copy properties
         self.slice0 = serie._datasets[0]
@@ -318,6 +316,12 @@ class Scan:
             print('No slice location in serie, falling back to ImagePositionPatient')
             self.sliceLocations = [float(s.ImagePositionPatient[2]) for s in serie._datasets]
 
+        # load the image array
+        voxel_array = serie.get_pixel_array().astype(scipy.int16)
+        # set axes to be l-r, a-p, s-i
+        voxel_array = voxel_array.transpose([2, 1, 0])
+        # get transformation matrices
+        i2c_mat, c2i_mat = series_affines(serie)
         self.setImageArray(
             voxel_array,
             voxelSpacing=scipy.array(serie.sampling[::-1]),

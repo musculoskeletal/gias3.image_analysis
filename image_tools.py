@@ -192,16 +192,6 @@ def series_affines(stack, default_patient_position='FFS', invertz=False):
     index2CoordA[:3, 2] = (TN - T1) / (NSlices - 1)  # average slice spacing from 1st to last
     index2CoordA[:3, 3] = T1  # last column
 
-    # if feet first
-    # You should also flip the stack Z if FFS, but we don't do that here
-    # FF = stack.info.get('PatientPosition', default_patient_position)
-    # if FF=='FFS':
-    #     index2CoordA[:3,2] = -(T1-TN)/(1-NSlices)  # slice spacing
-    #     index2CoordA[:3,3] = TN  # last column
-    # else:
-    #     index2CoordA[:3,2] = (T1-TN)/(1-NSlices)  # slice spacing
-    #     index2CoordA[:3,3] = T1  # last column
-
     if invertz:
         index2CoordA[:3, 2] = (T1 - TN) / (1 - NSlices)  # slice spacing
 
@@ -1069,11 +1059,6 @@ class Scan:
 
         self.voxelSpacing = scipy.array(self.voxelSpacing) / scale
         if self.USE_DICOM_AFFINE:
-            # self.index2CoordA[0,0] = self.index2CoordA[0,0]/scale
-            # self.index2CoordA[1,1] = self.index2CoordA[1,1]/scale
-            # self.index2CoordA[2,2] = self.index2CoordA[2,2]/scale
-            # self.coord2IndexA = inv(self.index2CoordA)
-
             tmat = scipy.eye(3)
             tmat[[0, 1, 2], [0, 1, 2]] = 1.0 / scipy.array(scale)
             self.index2CoordA[:3, :3] = scipy.dot(tmat, self.index2CoordA[:3, :3])
@@ -1092,12 +1077,6 @@ class Scan:
 
             if self.USE_DICOM_AFFINE:
                 newScan.USE_DICOM_AFFINE = True
-                # i2cmat = self.index2CoordA.copy()  # origin (4th col) is the same
-                # i2cmat[0,0] = self.index2CoordA[0,0]*factors[0]
-                # i2cmat[1,1] = self.index2CoordA[1,1]*factors[1]
-                # i2cmat[2,2] = self.index2CoordA[2,2]*factors[2]
-                # c2imat = inv(i2cmat)
-
                 tmat = scipy.eye(3)
                 tmat[[0, 1, 2], [0, 1, 2]] = factors
                 i2cmat = scipy.array(self.index2CoordA)

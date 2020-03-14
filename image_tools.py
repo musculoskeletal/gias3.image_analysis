@@ -178,6 +178,9 @@ def load_series(folder, filepat=None, suid=None, readall=False):
 def series_affines(stack, default_patient_position='FFS', invertz=False):
     """
     Returns the index 2 coordinates and vice versa affine matrix for a dicom series
+
+    See
+     - https://nipy.org/nibabel/dicom/dicom_orientation.html
     """
     IPP = scipy.array([float(x) for x in stack.info.ImagePositionPatient])
     IOP = scipy.array([float(x) for x in stack.info.ImageOrientationPatient])

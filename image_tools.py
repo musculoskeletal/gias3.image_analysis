@@ -13,27 +13,25 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import os
-import sys
-
-import scipy
-from scipy.linalg import eigh, inv
-from scipy.optimize import leastsq
-from scipy.spatial.distance import euclidean
-from scipy.ndimage import rotate, affine_transform, zoom, map_coordinates, gaussian_filter1d, gaussian_filter, \
-    median_filter
-from scipy.interpolate import LSQUnivariateSpline
-from scipy.stats import linregress
-import numpy.ma as ma
 import re
 
+import numpy.ma as ma
+import pydicom
+import scipy
+import sys
+from scipy.interpolate import LSQUnivariateSpline
+from scipy.linalg import eigh, inv
+from scipy.ndimage import rotate, affine_transform, zoom, map_coordinates, gaussian_filter1d, gaussian_filter, \
+    median_filter
+from scipy.optimize import leastsq
+from scipy.spatial.distance import euclidean
+from scipy.stats import linregress
 from skimage.transform import downscale_local_mean
 
-import pydicom
-
-from gias2.registration import alignment_analytic
 from gias2.common import geoprimitives
-from gias2.learning.PCA import PCA
 from gias2.image_analysis import dicom_series
+from gias2.learning.PCA import PCA
+from gias2.registration import alignment_analytic
 
 try:
     from matplotlib import pyplot as plot

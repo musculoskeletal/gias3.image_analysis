@@ -14,97 +14,109 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import scipy
-from scipy import ndimage
-from gias2.learning import PCA
 import sys
 import time
+from scipy import ndimage
+
+from gias2.learning import PCA
+
 try:
     from matplotlib import pyplot as plot
     import matplotlib as mpl
 except ImportError:
     print('No Matplotlib, plotting functions will not work.')
-    
+
 usePyxScan = True
 
-def genSamplingPoints( X, N, d, xLim ):
+
+def genSamplingPoints(X, N, d, xLim):
     """ at each point in X[i], in direction N[i], calc the coordinates
     of d points between X[i]+xLim[0]*N[i] and x[i]+xLim[1]*N[i]
     """
     t = scipy.linspace(xLim[0], xLim[1], d)
-    p=(t[:,scipy.newaxis,scipy.newaxis]*N + X).transpose((1,0,2))
+    p = (t[:, scipy.newaxis, scipy.newaxis] * N + X).transpose((1, 0, 2))
     return p
 
-def sampleImage( image, x ):
+
+def sampleImage(image, x):
     """ samples image at set of point lists x. x.shape(nLists,pointsperlist,3)
     """
     # linear interpolation, therefore prefilter=false.
-    return ndimage.map_coordinates(image, scipy.transpose(x,(2,0,1)),
-                output=float, order=1, mode='nearest',
-                prefilter=False)
+    return ndimage.map_coordinates(image, scipy.transpose(x, (2, 0, 1)),
+                                   output=float, order=1, mode='nearest',
+                                   prefilter=False)
 
-def calcDerivNormalise( P ):
+
+def calcDerivNormalise(P):
     """ calculates the derivative of signals P, normalise against 
     sum of absolution values of signal.
     """
-    dP = P[:,1:] - P[:,:-1]
-    dP = scipy.hstack( (dP, dP[:,-1,scipy.newaxis]) )
-    dP[:,1:-1] = (dP[:,1:-1] + dP[:,:-2]) / 2.0 # average back and forward diff for interior points
-    dP = dP / abs(dP).sum(1)[:,scipy.newaxis]
-    dP = scipy.where( scipy.isfinite(dP), dP, 0.0 )
+    dP = P[:, 1:] - P[:, :-1]
+    dP = scipy.hstack((dP, dP[:, -1, scipy.newaxis]))
+    dP[:, 1:-1] = (dP[:, 1:-1] + dP[:, :-2]) / 2.0  # average back and forward diff for interior points
+    dP = dP / abs(dP).sum(1)[:, scipy.newaxis]
+    dP = scipy.where(scipy.isfinite(dP), dP, 0.0)
     return dP
 
-def calcDerivArray( P ):
+
+def calcDerivArray(P):
     """ calculates the derivative of signal P
     """
-    dP = P[:,1:] - P[:,:-1]
-    dP = scipy.hstack( (dP, dP[:,-1][:,scipy.newaxis]) )
-    dP[:,1:-1] = (dP[:,1:-1] + dP[:,:-2]) / 2.0 # average back and forward diff for interior points
+    dP = P[:, 1:] - P[:, :-1]
+    dP = scipy.hstack((dP, dP[:, -1][:, scipy.newaxis]))
+    dP[:, 1:-1] = (dP[:, 1:-1] + dP[:, :-2]) / 2.0  # average back and forward diff for interior points
     return dP
-    
-def _calcPPCPModes( epI, PPC, cutOff ):
+
+
+def _calcPPCPModes(epI, PPC, cutOff):
     pModes = []
     for i in epI:
         # calculate number of modes to use for profile matching
-        cumSpec = scipy.cumsum( PPC[i].getNormSpectrum() )
-        pModes.append( scipy.arange( scipy.where(cumSpec>cutOff)[0][0] ) )
-        
+        cumSpec = scipy.cumsum(PPC[i].getNormSpectrum())
+        pModes.append(scipy.arange(scipy.where(cumSpec > cutOff)[0][0]))
+
     return pModes
 
-def _asmStopCrit( matchIndices, nSamples, window=0.1, threshold=0.95 ):
+
+def _asmStopCrit(matchIndices, nSamples, window=0.1, threshold=0.95):
     """ returns true if thresh proportion of xpads are in the middle
     window proportion of pLength
     """
-    n0 = nSamples/2.0 - nSamples*window
-    n1 = nSamples/2.0 + nSamples*window
-    
+    n0 = nSamples / 2.0 - nSamples * window
+    n1 = nSamples / 2.0 + nSamples * window
+
     ##
     # print n0, n1
     ##
-    
-    passes = ((n0<=matchIndices) & (matchIndices<=n1)).sum()
-    passFrac = float(passes)/len(matchIndices)
+
+    passes = ((n0 <= matchIndices) & (matchIndices <= n1)).sum()
+    passFrac = float(passes) / len(matchIndices)
     if passFrac > threshold:
         return True, passFrac
     else:
         return False, passFrac
 
-def weightMDist( m, upper ):
+
+def weightMDist(m, upper):
     """ assign weights to datapoints for fitting based on their
     MDistance
     """
-    mCap = scipy.where(m>upper,upper,m)
-    W = 1.0 - mCap/upper    # 2x to shaft data weighted halfway
+    mCap = scipy.where(m > upper, upper, m)
+    W = 1.0 - mCap / upper  # 2x to shaft data weighted halfway
     return W
+
 
 if usePyxScan:
     import numpy
     import pyximport
+
     pyximport.install(
-        setup_args={"include_dirs":numpy.get_include()},
+        setup_args={"include_dirs": numpy.get_include()},
         reload_support=True,
         language_level=3
-        )
+    )
     from gias2.image_analysis import asm_search_c
+
     # reload(asm_search_c)
     scanProfile = asm_search_c.scanProfile
     profileSearchElementPoints = asm_search_c.profileSearchElementPoints
@@ -113,41 +125,44 @@ if usePyxScan:
     print('using cython for search')
 else:
     from .asm_search import *
+
     print('using python for search')
 
-#=====================================================================#
+
+# =====================================================================#
 class ASMSegmentationParams(object):
     """
     Parameters container class for ASMSegmentation.
     """
-    PPCFilename = ''            # filename of appearance pc file
-    GD = [10,10]
-    ND = 40                 # number of samples per profile
-    NLim = [-20.0, 20.0]    # (min, max) of extent of MODEL profile samples, e.g. (-10,10) for -10mm to 10mm either side of mesh
-    NPad = 20               # extra sample points either side of profile to sample
-    NRes = None             # auto-generated
-    NL = None               # auto-generated
+    PPCFilename = ''  # filename of appearance pc file
+    GD = [10, 10]
+    ND = 40  # number of samples per profile
+    NLim = [-20.0,
+            20.0]  # (min, max) of extent of MODEL profile samples, e.g. (-10,10) for -10mm to 10mm either side of mesh
+    NPad = 20  # extra sample points either side of profile to sample
+    NRes = None  # auto-generated
+    NL = None  # auto-generated
     matchMode = 'default'  # 'elementmedian', 'oneside', or 'default'
-    MDistWeight = True      # use mahalanobis distance of profile matches to weight its datapoint
+    MDistWeight = True  # use mahalanobis distance of profile matches to weight its datapoint
     MDistWeightUpper = 5.0  # datapoints with m distance above this are weighted zero
-    passWindow = 0.1        # central proportion of a profile in which search is considered converged
-    minPassFrac = 0.9       # minimum fraction of datapoints needed to pass to consider segmentation converged
-    maxIt = 10              # maximum segmentation iterations
+    passWindow = 0.1  # central proportion of a profile in which search is considered converged
+    minPassFrac = 0.9  # minimum fraction of datapoints needed to pass to consider segmentation converged
+    maxIt = 10  # maximum segmentation iterations
     filterLandmarks = True  # ignore landmarks that are out of bounds or in masked regions.
-    imageZShift = False     # do z shift during coord to image index conversion
-    imageNegSpacing = False # do negative spacing during coord to image index conversion
+    imageZShift = False  # do z shift during coord to image index conversion
+    imageNegSpacing = False  # do negative spacing during coord to image index conversion
     verbose = 1
     PPCVarCutoff = 0.9
 
     def __init__(self, **params):
-        if params!=None:
+        if params != None:
             self.setParams(params)
 
         self._postProcess()
 
     def setParams(self, params):
         for param, value in list(params.items()):
-            self.__setattr__(param,value)
+            self.__setattr__(param, value)
 
         self._postProcess()
 
@@ -155,9 +170,9 @@ class ASMSegmentationParams(object):
         self.NLim = scipy.array(self.NLim)
         self.NRes = (self.NLim[1] - self.NLim[0]) / self.ND
         self.NL = self.NLim[1] - self.NLim[0]
-        
-class ASMSegmentation( object ):
-    
+
+
+class ASMSegmentation(object):
     PPC = None
     I = None
     spacing = None
@@ -166,13 +181,13 @@ class ASMSegmentation( object ):
     elementXIndices = None
     elementXIndicesFlat = None
     fitMesh = None
-    
-    def __init__( self, image=None, params=None, getMeshCoords=None, getMeshNormals=None, fitMesh=None):
-        
+
+    def __init__(self, image=None, params=None, getMeshCoords=None, getMeshNormals=None, fitMesh=None):
+
         self.hasMaskedImage = False
         self.filterLandmarks = True
 
-        if image!=None:
+        if image != None:
             self.setImage(image)
 
         self.params = params
@@ -184,52 +199,53 @@ class ASMSegmentation( object ):
         self.setMeshCoordinatesEvaluator(getMeshCoords)
         self.setMeshNormalEvaluator(getMeshNormals)
         self.setMeshFitter(fitMesh)
-    
-    def setMeshCoordinatesEvaluator( self, E ):
+
+    def setMeshCoordinatesEvaluator(self, E):
         self.getMeshCoords = E
-        
-    def setMeshNormalEvaluator( self, E ):
+
+    def setMeshNormalEvaluator(self, E):
         self.getMeshNormals = E
-    
-    def setElementXIndices( self, I ):
+
+    def setElementXIndices(self, I):
         self.elementXIndices = I
-        self.elementXIndicesFlat = scipy.hstack( self.elementXIndices )
-    
-    def setMeshFitter( self, F ):
+        self.elementXIndicesFlat = scipy.hstack(self.elementXIndices)
+
+    def setMeshFitter(self, F):
         """ function F should take arguments (data, initialParams, dataWeights)
         """
         self.fitMesh = F
-        
-    def setProfilePC( self, P ):
+
+    def setProfilePC(self, P):
         self.PPC = P
 
     def loadProfilePC(self, filename=None):
-        if filename==None:
+        if filename == None:
             filename = self.params.PPCFilename
 
         self.PPC = PCA.PCList()
         self.PPC.load(self.params.PPCFilename)
-        
-    def setImage( self, image):
+
+    def setImage(self, image):
         self.image = image
         self.hasMaskedImage = self.image.isMasked
         if self.hasMaskedImage:
             self.filterLandmarks = True
 
     def _evaluateLandmarks(self, meshParams):
-        self.XN = self.getMeshNormals( meshParams )
-        self.XMesh = self.getMeshCoords( meshParams )
+        self.XN = self.getMeshNormals(meshParams)
+        self.XMesh = self.getMeshCoords(meshParams)
 
     def _filterValidLandmarks(self, landmarks):
         # landmarkIndices = scipy.arange(len(landmarks))
 
         # first reject any point outside of the image volume
-        inds = self.image.coord2Index(scipy.array(landmarks),\
-                                      zShift=self.params.imageZShift,\
+        inds = self.image.coord2Index(scipy.array(landmarks), \
+                                      zShift=self.params.imageZShift, \
                                       negSpacing=self.params.imageNegSpacing)
 
         if self.hasMaskedImage:
-            landmarkMask = scipy.array([( self.image.checkIndexInBounds(l) and not self.image.checkIndexIsMasked(l) ) for l in inds], dtype=bool)
+            landmarkMask = scipy.array(
+                [(self.image.checkIndexInBounds(l) and not self.image.checkIndexIsMasked(l)) for l in inds], dtype=bool)
         else:
             landmarkMask = scipy.array([self.image.checkIndexInBounds(l) for l in inds], dtype=bool)
 
@@ -240,59 +256,58 @@ class ASMSegmentation( object ):
         the current set of field parameters. Smoothes samples and
         calculates the derivatives
         """
-        
+
         nLandmarks = self.XMesh.shape[0]
-        nSamples = self.params.ND+self.params.NPad*2
+        nSamples = self.params.ND + self.params.NPad * 2
 
         # generated in real coords
         # shape = (nlandmarks, nsamples, 3)
-        self.XSample = genSamplingPoints( self.XMesh, 
-                                          self.XN, 
-                                          nSamples, 
-                                          [self.params.NLim[0]-self.params.NPad*self.params.NRes,
-                                           self.params.NLim[1]+self.params.NPad*self.params.NRes], 
-                                          )
-        
+        self.XSample = genSamplingPoints(self.XMesh,
+                                         self.XN,
+                                         nSamples,
+                                         [self.params.NLim[0] - self.params.NPad * self.params.NRes,
+                                          self.params.NLim[1] + self.params.NPad * self.params.NRes],
+                                         )
+
         # convert to image coordinates
         # self.XSampleImg = self.image.coord2Index(self.XSample,
         #                   zShift=self.params.imageZShift,
         #                   negSpacing=self.params.imageNegSpacing,
         #                   )
         self.XSampleImg = self.image.coord2Index(
-                            scipy.vstack(self.XSample),
-                            zShift=self.params.imageZShift,
-                            negSpacing=self.params.imageNegSpacing,
-                            roundInt=False,
-                            ).reshape((nLandmarks, nSamples, -1))
+            scipy.vstack(self.XSample),
+            zShift=self.params.imageZShift,
+            negSpacing=self.params.imageNegSpacing,
+            roundInt=False,
+        ).reshape((nLandmarks, nSamples, -1))
 
         # self.P = sampleImage( self.image.I, self.XSampleImg )
 
         self.P = ndimage.map_coordinates(
-                    self.image.I,
-                    scipy.vstack(self.XSampleImg).T,
-                    output=float, order=1, mode='nearest',
-                    prefilter=False).reshape((nLandmarks, -1))
-                    
+            self.image.I,
+            scipy.vstack(self.XSampleImg).T,
+            output=float, order=1, mode='nearest',
+            prefilter=False).reshape((nLandmarks, -1))
 
-        self.dP = calcDerivArray( self.P )
+        self.dP = calcDerivArray(self.P)
 
     def _match2data(self, matchInd, landmarkMask):
 
         validLandmarks = scipy.where(landmarkMask)[0]
-        XSampleValid = self.XSample[landmarkMask,:]
-        data = XSampleValid[scipy.arange(len(validLandmarks),dtype=int), matchInd]
+        XSampleValid = self.XSample[landmarkMask, :]
+        data = XSampleValid[scipy.arange(len(validLandmarks), dtype=int), matchInd]
         return data
-    
-    def segment( self, meshParams0, verbose=1, debug=0, callback=None ):
+
+    def segment(self, meshParams0, verbose=1, debug=0, callback=None):
         """
         Run the main segmentation loop.
         meshParams0: array - initial mesh parameters
         """
 
-        if (len(self.PPC.L)-1)<max(self.elementXIndicesFlat):
-            raise ValueError('Maximum landmark index ({}) greater than number of profile models ({}). Check PPC.'\
-                    .format(max(self.elementXIndicesFlat), (len(self.PPC.L)-1)))
-        
+        if (len(self.PPC.L) - 1) < max(self.elementXIndicesFlat):
+            raise ValueError('Maximum landmark index ({}) greater than number of profile models ({}). Check PPC.' \
+                             .format(max(self.elementXIndicesFlat), (len(self.PPC.L) - 1)))
+
         print('\nstarting segmentation')
         it = 0
         mRMSOld = 0.0
@@ -300,27 +315,27 @@ class ASMSegmentation( object ):
         meshSDOld = 0.0
         meshParams = scipy.array(meshParams0)
         converged = False
-        outputHistory = {'meshParams':[],
-                         'meshRMS':[],
-                         'meshSD':[],
-                         'passFrac':[],
-                         'mahaDist':[],
-                         'mRMS':[],
+        outputHistory = {'meshParams': [],
+                         'meshRMS': [],
+                         'meshSD': [],
+                         'passFrac': [],
+                         'mahaDist': [],
+                         'mRMS': [],
                          }
-        
-        dataHistory = {'data':[],
-                       'W':[],
-                       'm':[],
-                       'M':[],
-                       'landmarkMask':[],
+
+        dataHistory = {'data': [],
+                       'W': [],
+                       'm': [],
+                       'M': [],
+                       'landmarkMask': [],
                        }
-        
+
         # calculate the modes needed for each profile PC based on pSpecCutOff
-        ppcModes = self.PPC.getModesFracVariance( self.params.PPCVarCutoff )
-            
+        ppcModes = self.PPC.getModesFracVariance(self.params.PPCVarCutoff)
+
         # in each iteration:
-        while it<self.params.maxIt:
-            
+        while it < self.params.maxIt:
+
             if debug:
                 t0 = time.time()
                 tprev = time.time()
@@ -328,14 +343,14 @@ class ASMSegmentation( object ):
             # evaluate landmark positions and normals
             self._evaluateLandmarks(meshParams)
             if debug:
-                print('landmark eval done (%6.3fs)'%(time.time()-tprev))
+                print('landmark eval done (%6.3fs)' % (time.time() - tprev))
                 tprev = time.time()
 
             # sample image along normals at a particular GD, ND, NLim for valid landmarks
             # self.P and self.dP are of shape (n valid landmarks, profile length)
             self._sampleImage()
             if debug:
-                print('image sampling done (%6.3fs)'%(time.time()-tprev))
+                print('image sampling done (%6.3fs)' % (time.time() - tprev))
                 tprev = time.time()
 
             # filter out out-of-bounds landmarks and landmarks in masked image regions in using a masked image
@@ -347,81 +362,83 @@ class ASMSegmentation( object ):
                 landmarkMask = scipy.ones(self.XMesh.shape[0], dtype=bool)
 
             if debug:
-                print('landmark filtering done (%6.3fs)'%(time.time()-tprev))
+                print('landmark filtering done (%6.3fs)' % (time.time() - tprev))
                 tprev = time.time()
 
             # match profiles
-            if self.params.matchMode=='default':
+            if self.params.matchMode == 'default':
                 landmarkIndices = scipy.where(landmarkMask)[0]
-                matchInd,m,M = profileSearchElementPoints( landmarkIndices, self.PPC.L, ppcModes, self.dP)
-            elif self.params.matchMode=='oneside':
-                matchInd,m,M = profileSearchElementOneSide( self.elementXIndices, self.PPC.L, ppcModes, self.dP )
-            elif self.params.matchMode=='elementmedian':
-                matchInd,m,M = profileSearchElementMedian( self.elementXIndices, self.PPC.L, ppcModes, self.dP, landmarkMask, 1.0 )
+                matchInd, m, M = profileSearchElementPoints(landmarkIndices, self.PPC.L, ppcModes, self.dP)
+            elif self.params.matchMode == 'oneside':
+                matchInd, m, M = profileSearchElementOneSide(self.elementXIndices, self.PPC.L, ppcModes, self.dP)
+            elif self.params.matchMode == 'elementmedian':
+                matchInd, m, M = profileSearchElementMedian(self.elementXIndices, self.PPC.L, ppcModes, self.dP,
+                                                            landmarkMask, 1.0)
             else:
                 raise ValueError('unrecognised matchMode')
 
             if debug:
-                print('profile search done (%6.3fs)'%(time.time()-tprev))
+                print('profile search done (%6.3fs)' % (time.time() - tprev))
                 tprev = time.time()
-            
+
             # convert best match positions to data points
             data = self._match2data(matchInd, landmarkMask)
             if debug:
-                print('match to data done (%6.3fs)'%(time.time()-tprev))
+                print('match to data done (%6.3fs)' % (time.time() - tprev))
                 tprev = time.time()
-            
+
             # rigid + mode fit GF to data points
             if self.params.MDistWeight:
-                W = weightMDist( m, self.params.MDistWeightUpper )
+                W = weightMDist(m, self.params.MDistWeightUpper)
             else:
-                W = scipy.ones( len(m) )
-                        
+                W = scipy.ones(len(m))
+
             # debug
             if debug:
                 print('profile search x (1st 10):', matchInd[:10])
-                #~ print 'profile search m:', m
-                #~ print 'profile search M:', M
-                #~ print 'profile data:', data
-                #~ print 'profile W:', W
-            
+                # ~ print 'profile search m:', m
+                # ~ print 'profile search M:', M
+                # ~ print 'profile data:', data
+                # ~ print 'profile W:', W
+
             newMeshParams, meshRMS, meshSD = self.fitMesh(data, x0=meshParams.copy(),
-                                                weights=W,
-                                                landmarkIndices=scipy.where(landmarkMask)[0])
+                                                          weights=W,
+                                                          landmarkIndices=scipy.where(landmarkMask)[0])
 
             if debug:
-                print('mesh fit done (%6.3fs)'%(time.time()-tprev))
+                print('mesh fit done (%6.3fs)' % (time.time() - tprev))
                 tprev = time.time()
 
             dx = matchInd
-            stopSeg, passFrac = _asmStopCrit( matchInd,
-                                              self.params.ND+2*self.params.NPad,
-                                              window=self.params.passWindow,
-                                              threshold=self.params.minPassFrac )
-            
-            mRMS = scipy.sqrt( m.mean() )
+            stopSeg, passFrac = _asmStopCrit(matchInd,
+                                             self.params.ND + 2 * self.params.NPad,
+                                             window=self.params.passWindow,
+                                             threshold=self.params.minPassFrac)
+
+            mRMS = scipy.sqrt(m.mean())
             outputHistory['meshParams'].append(newMeshParams)
             outputHistory['meshRMS'].append(meshRMS)
             outputHistory['meshSD'].append(meshSD)
             outputHistory['passFrac'].append(passFrac)
             outputHistory['mRMS'].append(mRMS)
-            dataHistory['data'].append( data )
-            dataHistory['W'].append( W )
-            dataHistory['m'].append( m )
-            dataHistory['M'].append( M )
-            dataHistory['landmarkMask'].append( landmarkMask )
+            dataHistory['data'].append(data)
+            dataHistory['W'].append(W)
+            dataHistory['m'].append(m)
+            dataHistory['M'].append(M)
+            dataHistory['landmarkMask'].append(landmarkMask)
 
             it += 1
-            
+
             if verbose:
-                print('\nit: %(it)03i  M-distance RMS: %(mRMS)5.3f  passFrac: %(passFrac)5.3f  MeshRMS: %(meshRMS)5.3f  MeshSD: %(meshSD)5.3f'\
-                      %{'it':it, 'mRMS': mRMS, 'passFrac':passFrac, 'meshRMS':meshRMS, 'meshSD':meshSD})
-                print('mesh params: '+' '.join( ['%(0)2.3f' %{'0':i} for i in newMeshParams] ))
+                print(
+                    '\nit: %(it)03i  M-distance RMS: %(mRMS)5.3f  passFrac: %(passFrac)5.3f  MeshRMS: %(meshRMS)5.3f  MeshSD: %(meshSD)5.3f' \
+                    % {'it': it, 'mRMS': mRMS, 'passFrac': passFrac, 'meshRMS': meshRMS, 'meshSD': meshSD})
+                print('mesh params: ' + ' '.join(['%(0)2.3f' % {'0': i} for i in newMeshParams]))
 
             if callback:
                 callback(newMeshParams, data, meshRMS, passFrac)
-                
-            if stopSeg or ((mRMS==mRMSOld) and (meshRMS==meshRMSOld)):
+
+            if stopSeg or ((mRMS == mRMSOld) and (meshRMS == meshRMSOld)):
                 converged = True
                 break
             else:
@@ -429,17 +446,17 @@ class ASMSegmentation( object ):
                 meshRMSOld = meshRMS
                 meshSDOld = meshSD
                 meshParams = newMeshParams
-        
+
         # if converged, use latest outputs
-        if converged:       
+        if converged:
             self.meshParamsFinal = meshParams.copy()
             rmsFinal = meshRMS
             sdFinal = meshSD
         else:
             # use highest cFrac params
-            bestIt = scipy.argmax( outputHistory['passFrac'] )
+            bestIt = scipy.argmax(outputHistory['passFrac'])
             if verbose:
-                print('using results from iteration', bestIt+1)
+                print('using results from iteration', bestIt + 1)
             self.meshParamsFinal = outputHistory['meshParams'][bestIt]
             rmsFinal = outputHistory['meshRMS'][bestIt]
             sdFinal = outputHistory['meshSD'][bestIt]
@@ -451,33 +468,34 @@ class ASMSegmentation( object ):
             landmarkMask = dataHistory['landmarkMask'][bestIt]
         if verbose:
             print('DONE')
-            
-        return self.meshParamsFinal, data, W, landmarkMask,\
+
+        return self.meshParamsFinal, data, W, landmarkMask, \
                rmsFinal, sdFinal, passFrac, m, M, outputHistory
 
-    def showProfileMatch( self, profileI, nPModes ):
+    def showProfileMatch(self, profileI, nPModes):
         PData = self.P[profileI]
         dPData = self.dP[profileI]
         ppc = self.PPC.L[profileI]
         dPMean = ppc.getMean()
-        mx, m, M = scanProfile( dPData, ppc, list(range(nPModes)) )
-        
+        mx, m, M = scanProfile(dPData, ppc, list(range(nPModes)))
+
         f = plot.figure()
         ax1 = f.add_subplot(411)
         ax2 = f.add_subplot(412)
         ax3 = f.add_subplot(413)
         ax4 = f.add_subplot(414)
-        
-        ax1.plot( PData )
-        ax2.plot( dPData )
-        ax3.plot( dPMean )
-        ax4.plot( M )
+
+        ax1.plot(PData)
+        ax2.plot(dPData)
+        ax3.plot(dPMean)
+        ax4.plot(M)
         plot.show()
-        
+
         print('match index:', mx)
         print('match M-Distance:', m)
 
-#==========================================================================#        
+
+# ==========================================================================#
 class TrainASMPPCs(object):
     """
     Class for training ASM profile PCs. Given a iterable that returns a 
@@ -510,13 +528,13 @@ class TrainASMPPCs(object):
         self.negSpacing = negSpacing
 
         self.params = ASMSegmentationParams(
-                        ND=self.nSamples,
-                        NLim=self.xLim,
-                        NPad=0,
-                        filterLandmarks=True,
-                        imageZShift=self.zShift,
-                        imageNegSpacing=self.negSpacing,
-                        )
+            ND=self.nSamples,
+            NLim=self.xLim,
+            NPad=0,
+            filterLandmarks=True,
+            imageZShift=self.zShift,
+            imageNegSpacing=self.negSpacing,
+        )
 
     def setTrainingSamples(self, samples, nLandmarks):
         """
@@ -542,8 +560,8 @@ class TrainASMPPCs(object):
         self._landmarkMasks = []
 
         for i, (scan, L, N) in enumerate(self.trainingSamples):
-
             print('sampling profiles')
+
             def getLandmarks(x):
                 return L
 
@@ -551,8 +569,8 @@ class TrainASMPPCs(object):
                 return N
 
             self._asm = ASMSegmentation(scan, params=self.params,
-                                getMeshCoords=getLandmarks,
-                                getMeshNormals=getNormals)
+                                        getMeshCoords=getLandmarks,
+                                        getMeshNormals=getNormals)
 
             self._asm._evaluateLandmarks(None)
             self._asm._sampleImage()
@@ -563,7 +581,7 @@ class TrainASMPPCs(object):
         self._dP = scipy.array(self._dP, dtype=float)
         self._landmarkMasks = scipy.array(self._landmarkMasks, dtype=bool)
         self._dP = scipy.ma.masked_array(self._dP,
-                                         scipy.repeat((~self._landmarkMasks)[:,:,scipy.newaxis], self.nSamples, 2),
+                                         scipy.repeat((~self._landmarkMasks)[:, :, scipy.newaxis], self.nSamples, 2),
                                          dtype=float)
 
         print('profiles shape:', self._dP.shape)
@@ -578,9 +596,9 @@ class TrainASMPPCs(object):
         self.PPCs = PCA.PCList()
         for i in range(self.nLandmarks):
             sys.stdout.flush()
-            sys.stdout.write('\rpoint %5i/%5i'%(i+1,self.nLandmarks))
+            sys.stdout.write('\rpoint %5i/%5i' % (i + 1, self.nLandmarks))
 
-            dP = self._dP[:,i,:]
+            dP = self._dP[:, i, :]
             pca = PCA.PCA()
             pca.setData(dP.T)
             pca.svd_decompose()
@@ -592,24 +610,24 @@ class TrainASMPPCs(object):
         inputs:
         filename: string
         """
-        self.PPCs.save( filename )
+        self.PPCs.save(filename)
 
-    def showProfile( self, profileI, subjectI):
-        dPSubject = self._dP.data[subjectI,profileI,:]
-        dPMean = self._dP[:,profileI,:].mean(0)
-        
+    def showProfile(self, profileI, subjectI):
+        dPSubject = self._dP.data[subjectI, profileI, :]
+        dPMean = self._dP[:, profileI, :].mean(0)
+
         f = plot.figure()
         ax1 = f.add_subplot(311)
         ax2 = f.add_subplot(312)
         ax3 = f.add_subplot(313)
-        
-        ax1.plot( dPSubject )
-        ax2.plot( dPMean )
 
-        if self.PPCs!=None:
+        ax1.plot(dPSubject)
+        ax2.plot(dPMean)
+
+        if self.PPCs != None:
             pcMean = self.PPCs.L[profileI].getMean()
             ax3.plot(pcMean)
 
         plot.show()
-        
+
         print('profile masked:', ~self._landmarkMasks[subjectI, profileI])

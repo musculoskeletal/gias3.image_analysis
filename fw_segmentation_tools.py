@@ -424,7 +424,10 @@ def _makeMeshFitPointNoFit():
 
 
 def _makeMeshFitNodal(objMode, GF, EPD, sobD, sobW, ND, NW, fixedNodes=None, xtol=None, maxIt=None, maxItPerIt=None,
-                      nClosestPoints=None, treeArgs={}):
+                      nClosestPoints=None, treeArgs=None):
+    if treeArgs is None:
+        treeArgs = {}
+
     def meshFitNodal(data, x0):
         GF, gfFitPOpt, meshFitRMS, meshFitError = fitting_tools.fitSurfacePerItSearch(objMode,
                                                                                       GF,

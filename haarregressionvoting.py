@@ -19,7 +19,6 @@ import numpy as np
 import sys
 from sklearn.ensemble import ExtraTreesRegressor
 
-# from gias.learning.forest_voting import ExtraTreesRegressorVoter
 from gias2.image_analysis import haar
 from gias2.image_analysis import image_tools
 from gias2.image_analysis import integralimage
@@ -296,7 +295,7 @@ class HaarImage(image_tools.Scan):
         features = features.reshape((nPoints, n, -1))
 
         if len(features) == 0:
-            warnings.warn("No suitable sampling locations, p = " + str(p))
+            warnings.warn("No suitable sampling locations")
 
         return displacements, features
 

@@ -11,10 +11,11 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ===============================================================================
 """
+from distutils.extension import Extension
+
+from distutils.core import setup
 
 from Cython.Distutils import build_ext
-from distutils.core import setup
-from distutils.extension import Extension
 
 setup(
     cmdclass={'build_ext': build_ext},

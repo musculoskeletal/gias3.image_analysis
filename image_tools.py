@@ -17,7 +17,7 @@ import re
 
 import numpy.ma as ma
 import pydicom
-import scipy
+import numpy
 import sys
 from scipy.interpolate import LSQUnivariateSpline
 from scipy.linalg import eigh, inv
@@ -100,7 +100,7 @@ def _get_larget_series(series):
     """
     Return the series with the most number of slices
     """
-    largest_series = scipy.array([0, 0, 0])
+    largest_series = numpy.array([0, 0, 0])
     # Get the largest series 
     for s in series:
         # We only care about 3d array
@@ -180,14 +180,14 @@ def series_affines(stack, default_patient_position='FFS', invertz=False):
     See
      - https://nipy.org/nibabel/dicom/dicom_orientation.html
     """
-    IPP = scipy.array([float(x) for x in stack.info.ImagePositionPatient])
-    IOP = scipy.array([float(x) for x in stack.info.ImageOrientationPatient])
-    PS = scipy.array([float(x) for x in stack.info.PixelSpacing])
-    T1 = scipy.array([float(x) for x in stack._datasets[0].ImagePositionPatient])
-    TN = scipy.array([float(x) for x in stack._datasets[-1].ImagePositionPatient])
+    IPP = numpy.array([float(x) for x in stack.info.ImagePositionPatient])
+    IOP = numpy.array([float(x) for x in stack.info.ImageOrientationPatient])
+    PS = numpy.array([float(x) for x in stack.info.PixelSpacing])
+    T1 = numpy.array([float(x) for x in stack._datasets[0].ImagePositionPatient])
+    TN = numpy.array([float(x) for x in stack._datasets[-1].ImagePositionPatient])
     NSlices = stack.shape[0]
 
-    index2CoordA = scipy.eye(4, dtype=float)
+    index2CoordA = numpy.eye(4, dtype=float)
     index2CoordA[:3, 1] = IOP[3:] * PS[1]  # in-plane voxel spacing along a row
     index2CoordA[:3, 0] = IOP[:3] * PS[0]  # in-plane voxel spacing along a column
     index2CoordA[:3, 2] = (TN - T1) / (NSlices - 1)  # average slice spacing from 1st to last
@@ -266,14 +266,14 @@ class Scan:
         self.calculatePrincipalAxes()
 
         if voxelSpacing is not None:
-            self.voxelSpacing = scipy.array(voxelSpacing)
+            self.voxelSpacing = numpy.array(voxelSpacing)
         else:
-            self.voxelSpacing = scipy.array([1.0, 1.0, 1.0])
+            self.voxelSpacing = numpy.array([1.0, 1.0, 1.0])
 
         if voxelOrigin is not None:
-            self.voxelOrigin = scipy.array(voxelOrigin)
+            self.voxelOrigin = numpy.array(voxelOrigin)
         else:
-            self.voxelOrigin = scipy.array([0.0, 0.0, 0.0])
+            self.voxelOrigin = numpy.array([0.0, 0.0, 0.0])
 
         # self.renderer = vtkRender.VtkImageVolumeRenderer( self.I )
         # self.renderer.setCoM( self.CoM, self.pAxes, self.pAxesMag )
@@ -308,15 +308,15 @@ class Scan:
             self.sliceLocations = [float(s.ImagePositionPatient[2]) for s in serie._datasets]
 
         # load the image array
-        voxel_array = serie.get_pixel_array().astype(scipy.int16)
+        voxel_array = serie.get_pixel_array().astype(numpy.int16)
         # set axes to be l-r, a-p, s-i
         voxel_array = voxel_array.transpose([2, 1, 0])
         # get transformation matrices
         i2c_mat, c2i_mat = series_affines(serie)
         self.setImageArray(
             voxel_array,
-            voxelSpacing=scipy.array(serie.sampling[::-1]),
-            voxelOrigin=scipy.array(serie.info.ImagePositionPatient),
+            voxelSpacing=numpy.array(serie.sampling[::-1]),
+            voxelOrigin=numpy.array(serie.info.ImagePositionPatient),
             i2cmat=i2c_mat,
             c2imat=c2i_mat
         )
@@ -366,12 +366,12 @@ class Scan:
 
         # Read images into array I
         if filter:
-            self.I = scipy.empty([slice0.pixel_array.shape[0], slice0.pixel_array.shape[1], len(files)], dtype='uint8')
+            self.I = numpy.empty([slice0.pixel_array.shape[0], slice0.pixel_array.shape[1], len(files)], dtype='uint8')
         else:
-            self.I = scipy.empty([slice0.pixel_array.shape[0], slice0.pixel_array.shape[1], len(files)], dtype='int16')
+            self.I = numpy.empty([slice0.pixel_array.shape[0], slice0.pixel_array.shape[1], len(files)], dtype='int16')
 
         poLoad = ProgressOutput("Loading scan", len(files))
-        self.sliceLocations = scipy.zeros(len(files), dtype=float)
+        self.sliceLocations = numpy.zeros(len(files), dtype=float)
         for sl, f in enumerate(files):
             try:
                 slice = pydicom.dcmread(os.path.join(self.read_folder, f), force=True)
@@ -392,15 +392,15 @@ class Scan:
         poLoad.output("{}: {} slices loaded".format(self.read_folder, sl))
 
         # reorder slices by slice location
-        self.I = self.I[:, :, scipy.argsort(self.sliceLocations)]
+        self.I = self.I[:, :, numpy.argsort(self.sliceLocations)]
 
         if sliceSpacingOveride != None:
             self.sliceSpacing = sliceSpacingOveride
 
         # set axes to be l-r, a-p, s-i
         self.I = self.I.transpose([1, 0, 2])  # original
-        self.voxelSpacing = scipy.array([self.pixelSpacing[0], self.pixelSpacing[1], self.sliceSpacing])
-        self.voxelOrigin = scipy.array(self.slice0.ImagePositionPatient)
+        self.voxelSpacing = numpy.array([self.pixelSpacing[0], self.pixelSpacing[1], self.sliceSpacing])
+        self.voxelOrigin = numpy.array(self.slice0.ImagePositionPatient)
 
     def loadDicomFolderNew(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
         """
@@ -437,7 +437,7 @@ class Scan:
         # if there are multiple series, get the one with the most number of slices
         self.stack = _get_larget_series(stacks)
 
-        self.I = self.stack.get_pixel_array().astype(scipy.int16)
+        self.I = self.stack.get_pixel_array().astype(numpy.int16)
         self.info = self.stack.info
 
         try:
@@ -450,12 +450,12 @@ class Scan:
         # set axes to be l-r, a-p, s-i
         self.I = self.I.transpose([2, 1, 0])  # original
         # self.I = self.I[:,:,::-1]
-        self.voxelSpacing = scipy.array(self.stack.sampling[::-1])  # original
+        self.voxelSpacing = numpy.array(self.stack.sampling[::-1])  # original
         # ======================================================#
 
         if sliceSpacingOveride != None:
             self.voxelSpacing[2] = sliceSpacingOveride
-        self.voxelOrigin = scipy.array(self.stack.info.ImagePositionPatient)
+        self.voxelOrigin = numpy.array(self.stack.info.ImagePositionPatient)
         # self.voxelOffset = self.voxelOrigin - (-1.0*self.voxelSpacing)*self.I.shape
 
         self.index2CoordA, self.coord2IndexA = series_affines(
@@ -499,11 +499,11 @@ class Scan:
             self.sliceSpacing = sliceSliceLocation - self._previousSliceLocation
             self.sliceTolerance = 0.0001 * self.sliceSpacing;
 
-        dPixel = scipy.absolute([slice.PixelSpacing[0] - self.pixelSpacing[0], \
+        dPixel = numpy.absolute([slice.PixelSpacing[0] - self.pixelSpacing[0], \
                                  slice.PixelSpacing[1] - self.pixelSpacing[1]])
 
         if self.sliceSpacing:
-            dSlice = scipy.absolute((sliceSliceLocation - self._previousSliceLocation) - self.sliceSpacing)
+            dSlice = numpy.absolute((sliceSliceLocation - self._previousSliceLocation) - self.sliceSpacing)
 
         if dPixel[0] > self.pixelTolerance or dPixel[1] > self.pixelTolerance \
                 or dSlice > self.sliceTolerance:
@@ -552,7 +552,7 @@ class Scan:
         else:
             slice_locations = [float(s.ImagePositionPatient[2]) for s in self.stack._datasets]
 
-        sorted_args = scipy.argsort(slice_locations)
+        sorted_args = numpy.argsort(slice_locations)
         if order == 'descending':
             sorted_args = sorted_args[::-1]
 
@@ -584,12 +584,12 @@ class Scan:
 
     # ================================================================ #
     def set_i2c_mat(self, m):
-        self.index2CoordA = scipy.array(m)
+        self.index2CoordA = numpy.array(m)
         self.coord2IndexA = inv(self.index2CoordA)
         self.USE_DICOM_AFFINE = True
 
     def set_c2i_mat(self, m):
-        self.coord2IndexA = scipy.array(m)
+        self.coord2IndexA = numpy.array(m)
         self.index2CoordA = inv(self.coord2IndexA)
         self.USE_DICOM_AFFINE = True
 
@@ -597,8 +597,8 @@ class Scan:
 
         if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
-            _inds = scipy.pad(I.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
-            return scipy.dot(self.index2CoordA, _inds)[:3, :].T
+            _inds = numpy.pad(I.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
+            return numpy.dot(self.index2CoordA, _inds)[:3, :].T
         else:
             if negSpacing:
                 X = -self.voxelSpacing * I + self.voxelOrigin
@@ -620,10 +620,10 @@ class Scan:
 
         if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
-            ind = scipy.pad(X.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
-            ind = scipy.dot(self.coord2IndexA, ind)[:3, :].T
+            ind = numpy.pad(X.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
+            ind = numpy.dot(self.coord2IndexA, ind)[:3, :].T
             if roundInt:
-                ind = scipy.around(ind).astype(int)
+                ind = numpy.around(ind).astype(int)
             return ind
         else:
             # return (p / self.voxelSpacing) + self.voxelOffset
@@ -631,12 +631,12 @@ class Scan:
                 # print 'neg spacing'
                 ind = (X - self.voxelOrigin) / (-self.voxelSpacing)
             else:
-                # ind = scipy.around( (X - self.voxelOffset) / (self.voxelSpacing) ).astype(int)    # original
+                # ind = numpy.around( (X - self.voxelOffset) / (self.voxelSpacing) ).astype(int)    # original
                 ind = (X - self.voxelOrigin) / (self.voxelSpacing)
-                # ind = scipy.around( (X - self.voxelOrigin)/(self.voxelSpacing) ).astype(int) + [0,0,self.I.shape[2]]
+                # ind = numpy.around( (X - self.voxelOrigin)/(self.voxelSpacing) ).astype(int) + [0,0,self.I.shape[2]]
 
             if roundInt:
-                ind = scipy.around(ind).astype(int)
+                ind = numpy.around(ind).astype(int)
 
             if zShift:
                 # print 'z shifting'
@@ -656,7 +656,7 @@ class Scan:
 
         if any(ind < 0):
             return False
-        elif any(ind > (scipy.array(self.I.shape) - 1)):
+        elif any(ind > (numpy.array(self.I.shape) - 1)):
             return False
         else:
             return True
@@ -667,7 +667,7 @@ class Scan:
         else:
             try:
                 return self.I.mask[ind[0], ind[1], ind[2]]
-                # return scipy.take(self.I.mask, ind)
+                # return numpy.take(self.I.mask, ind)
             except IndexError:
                 return True
 
@@ -679,7 +679,7 @@ class Scan:
     # ~ itk_py_converter = itk.PyBuffer[self.imageType]
     # ~ self.I = itk_py_converter.GetArrayFromImage(self.rawImage)
     # ~ self.I = itk_py_converter.GetArrayFromImage( self.reader.GetOutput() )
-    # ~ self.I = scipy.array( self.I, dtype = int )
+    # ~ self.I = numpy.array( self.I, dtype = int )
     # ~ del itk_py_converter
     # ~ print "Image array loaded, size = "+str(self.I.shape)
     # ~ return
@@ -733,7 +733,7 @@ class Scan:
 
     #   writeSlice( self.I, prefix )
 
-    #   #~ numLength = int( scipy.log10( self.I.shape[0] ) ) + 2
+    #   #~ numLength = int( numpy.log10( self.I.shape[0] ) ) + 2
     #   #~ for i in range(self.I.shape[0]):
     #       #~ filename = prefix + "_%.*d"%(numLength, i ) +'.png'
     #       #~ imsave( filename, self.I[i,:,:] )    
@@ -808,11 +808,11 @@ class Scan:
 
         # create a sample grid centered about origin
         # these are in the plane's local 2D coordinates
-        h, w = scipy.array(slice_shape) * scipy.array(res)
-        sgrid_i = scipy.linspace(-h / 2.0, (h / 2.0) - res[0], slice_shape[0])
-        sgrid_j = scipy.linspace(-w / 2.0, (w / 2.0) - res[1], slice_shape[1])
-        sgrid_ij = scipy.meshgrid(sgrid_i, sgrid_j)
-        sgrid_xy = scipy.vstack([
+        h, w = numpy.array(slice_shape) * numpy.array(res)
+        sgrid_i = numpy.linspace(-h / 2.0, (h / 2.0) - res[0], slice_shape[0])
+        sgrid_j = numpy.linspace(-w / 2.0, (w / 2.0) - res[1], slice_shape[1])
+        sgrid_ij = numpy.meshgrid(sgrid_i, sgrid_j)
+        sgrid_xy = numpy.vstack([
             sgrid_ij[1].ravel(),
             sgrid_ij[0].ravel(),
         ]).T
@@ -842,40 +842,40 @@ class Scan:
         slice_plane = geoprimitives.Plane(P, N)
 
         # reverse hack, not sure why 
-        # ~ P = scipy.array(P)[::-1]
-        # ~ N = norm(scipy.array(N))[::-1]
+        # ~ P = numpy.array(P)[::-1]
+        # ~ N = norm(numpy.array(N))[::-1]
         # calc affine matrix going from image normal to slice normal
         sliceV0 = N  # z
-        # ~ sliceV1 = norm( scipy.subtract( [P[0], P[1], evalPlaneZ( P, N, P[0]+1.0, P[1]+1.0 )], P ) )
-        # ~ sliceV1 = norm( scipy.subtract( [evalPlaneZ( P, N, P[2]+1.0, P[1]+1.0 ), P[1]+1.0, P[2]+1.0], P ) )  # y
-        sliceV1 = norm(scipy.subtract([evalPlaneZ(P, N, P[2] + 1.0, P[1]), P[1], P[2] + 1.0], P))  # y
-        sliceV2 = scipy.cross(sliceV0, sliceV1)  # x
+        # ~ sliceV1 = norm( numpy.subtract( [P[0], P[1], evalPlaneZ( P, N, P[0]+1.0, P[1]+1.0 )], P ) )
+        # ~ sliceV1 = norm( numpy.subtract( [evalPlaneZ( P, N, P[2]+1.0, P[1]+1.0 ), P[1]+1.0, P[2]+1.0], P ) )  # y
+        sliceV1 = norm(numpy.subtract([evalPlaneZ(P, N, P[2] + 1.0, P[1]), P[1], P[2] + 1.0], P))  # y
+        sliceV2 = numpy.cross(sliceV0, sliceV1)  # x
 
-        flatAxes = [P, scipy.eye(3, dtype=float)]
-        # ~ sliceAxes = [P, scipy.array([sliceV2, sliceV1, sliceV1]) ] # another reverse hack, not sure why either
-        sliceAxes = [P, scipy.array([sliceV0, sliceV1, sliceV2]).transpose()]
+        flatAxes = [P, numpy.eye(3, dtype=float)]
+        # ~ sliceAxes = [P, numpy.array([sliceV2, sliceV1, sliceV1]) ] # another reverse hack, not sure why either
+        sliceAxes = [P, numpy.array([sliceV0, sliceV1, sliceV2]).transpose()]
 
         aMatrix = alignment_analytic.calcAffine(flatAxes, sliceAxes)
         # ~ aMatrix = alignment.calcAffine( sliceAxes, flatAxes )
 
         # generate grid coords to evaluate image at
-        # ~ flatX = scipy.linspace( P[0] - sliceShape[0]/2.0, P[0]+sliceShape[0]/2.0, sliceShape[0] )
-        # ~ flatY = scipy.linspace( P[1] - sliceShape[1]/2.0, P[1]+sliceShape[1]/2.0, sliceShape[1] )
+        # ~ flatX = numpy.linspace( P[0] - sliceShape[0]/2.0, P[0]+sliceShape[0]/2.0, sliceShape[0] )
+        # ~ flatY = numpy.linspace( P[1] - sliceShape[1]/2.0, P[1]+sliceShape[1]/2.0, sliceShape[1] )
 
-        flatX = scipy.linspace(P[2] - sliceShape[1] / 2.0, P[2] + sliceShape[1] / 2.0, sliceShape[1])
-        flatY = scipy.linspace(P[1] - sliceShape[0] / 2.0, P[1] + sliceShape[0] / 2.0, sliceShape[0])
-        X, Y = scipy.meshgrid(flatX, flatY)
+        flatX = numpy.linspace(P[2] - sliceShape[1] / 2.0, P[2] + sliceShape[1] / 2.0, sliceShape[1])
+        flatY = numpy.linspace(P[1] - sliceShape[0] / 2.0, P[1] + sliceShape[0] / 2.0, sliceShape[0])
+        X, Y = numpy.meshgrid(flatX, flatY)
         xCoords = X.ravel()
         yCoords = Y.ravel()
-        zCoords = scipy.ones(xCoords.shape[0]) * P[0]
+        zCoords = numpy.ones(xCoords.shape[0]) * P[0]
 
         # image stack indices are z, y, x
-        # ~ flatCoords = scipy.array( [xCoords, yCoords, zCoords, scipy.ones(xCoords.shape[0])] )
-        flatCoords = scipy.array([zCoords, yCoords, xCoords, scipy.ones(xCoords.shape[0])])
-        sliceCoords = scipy.dot(aMatrix, flatCoords)
+        # ~ flatCoords = numpy.array( [xCoords, yCoords, zCoords, numpy.ones(xCoords.shape[0])] )
+        flatCoords = numpy.array([zCoords, yCoords, xCoords, numpy.ones(xCoords.shape[0])])
+        sliceCoords = numpy.dot(aMatrix, flatCoords)
 
         sliceArray = map_coordinates(self.I, sliceCoords, order=order)
-        sliceImage = scipy.reshape(sliceArray, sliceShape)
+        sliceImage = numpy.reshape(sliceArray, sliceShape)
 
         return Slice(sliceImage, None, None, origin=P, normal=N)
 
@@ -897,7 +897,7 @@ class Scan:
         """
 
         # large numbers are involved
-        I = self.I.astype(scipy.int64)
+        I = self.I.astype(numpy.int64)
         if I.min() < 0.0:
             I -= I.min()
 
@@ -910,13 +910,13 @@ class Scan:
             self.isZeroMass = True
             return
         else:
-            i0 = scipy.arange(I.shape[0])
-            i1 = scipy.arange(I.shape[1])
-            i2 = scipy.arange(I.shape[2])
+            i0 = numpy.arange(I.shape[0])
+            i1 = numpy.arange(I.shape[1])
+            i2 = numpy.arange(I.shape[2])
             # centre of mass        
-            self.CoM[0] = scipy.dot(I.sum(1).sum(1), i0) / self.M00
-            self.CoM[1] = scipy.dot(I.sum(0).sum(1), i1) / self.M00
-            self.CoM[2] = scipy.dot(I.sum(0).sum(0), i2) / self.M00
+            self.CoM[0] = numpy.dot(I.sum(1).sum(1), i0) / self.M00
+            self.CoM[1] = numpy.dot(I.sum(0).sum(1), i1) / self.M00
+            self.CoM[2] = numpy.dot(I.sum(0).sum(0), i2) / self.M00
 
             # centered voxel coordinates
             self._iC = (i0 - self.CoM[0], i1 - self.CoM[1], i2 - self.CoM[2])
@@ -935,7 +935,7 @@ class Scan:
             print('ERROR: Scan.calculatePrincipalAxes: zero-mass object')
             return
 
-        self.momentMatrix = scipy.zeros((3, 3))
+        self.momentMatrix = numpy.zeros((3, 3))
 
         # populate inertial matrix
         self.momentMatrix[0, 0] = self._calcCentralMoment(2, 0, 0)
@@ -1005,9 +1005,9 @@ class Scan:
             # calculate angle between pMax and the projection of pMax on the x-y plane
             pMax = self.pAxes[:, self.pAxesMag.argmax()]
             print(pMax)
-            pMaxYZ = scipy.array([0.0, pMax[1], pMax[2]])
-            theta = scipy.arccos(scipy.inner(pMaxYZ, [0.0, 0.0, 1.0]) / mag(pMaxYZ))
-            theta = -180.0 * theta / scipy.pi
+            pMaxYZ = numpy.array([0.0, pMax[1], pMax[2]])
+            theta = numpy.arccos(numpy.inner(pMaxYZ, [0.0, 0.0, 1.0]) / mag(pMaxYZ))
+            theta = -180.0 * theta / numpy.pi
             if theta > 90.0:
                 theta -= 90.0
             # rotate the image in the y-z plane so that pMax lies in XY plane
@@ -1016,8 +1016,8 @@ class Scan:
             # caculate angle between new pMax and (1,0,0)
             pMax = self.pAxes[:, self.pAxesMag.argmax()]
             print(pMax)
-            phi = scipy.arccos(scipy.inner(pMax, [1.0, 0.0, 0.0]) / mag(pMax))
-            phi = -180.0 * phi / scipy.pi
+            phi = numpy.arccos(numpy.inner(pMax, [1.0, 0.0, 0.0]) / mag(pMax))
+            phi = -180.0 * phi / numpy.pi
             if phi > 90.0:
                 phi -= 90.0
             # rotate the image in the x-y plane so that pMax lies on [1,0,0]
@@ -1026,9 +1026,9 @@ class Scan:
             # calculate angle between new 2nd largest pAxes and (0,1,0)
             p2 = self.pAxes[:, self.pAxesMag.argsort()[-2]]
             print(p2)
-            p2XZ = scipy.array([0.0, p2[1], p2[2]])
-            ro = scipy.arccos(scipy.inner(p2XZ, [0.0, 1.0, 0.0]) / mag(p2XZ))
-            ro = -180.0 * ro / scipy.pi
+            p2XZ = numpy.array([0.0, p2[1], p2[2]])
+            ro = numpy.arccos(numpy.inner(p2XZ, [0.0, 1.0, 0.0]) / mag(p2XZ))
+            ro = -180.0 * ro / numpy.pi
             if ro > 90.0:
                 ro -= 90.0
             # rotate the image in the y-z plane so that p2 lies on [0,1,0]
@@ -1041,7 +1041,7 @@ class Scan:
 
     # ==================================================================#
     def rotate(self, angle, axes):
-        """ uses scipy.ndimage.rotate to rotate self.I in the plane
+        """ uses numpy.ndimage.rotate to rotate self.I in the plane
         defined by axes= [ axis1, axis2] by angle in degrees
         """
         self.I = rotate(self.I, angle, axes, order=1)
@@ -1051,18 +1051,18 @@ class Scan:
     # ==================================================================#
     def zoom(self, scale, order=3):
         """
-        Uses scipy.ndimage.zoom to scale self.I by.
+        Uses numpy.ndimage.zoom to scale self.I by.
 
         Scale can either be scalar (isotropic) or a list (orthotropic)
         """
         self.I = zoom(self.I, scale, order=order)
         print('New image shape: {}'.format(self.I.shape))
 
-        self.voxelSpacing = scipy.array(self.voxelSpacing) / scale
+        self.voxelSpacing = numpy.array(self.voxelSpacing) / scale
         if self.USE_DICOM_AFFINE:
-            tmat = scipy.eye(3)
-            tmat[[0, 1, 2], [0, 1, 2]] = 1.0 / scipy.array(scale)
-            self.index2CoordA[:3, :3] = scipy.dot(tmat, self.index2CoordA[:3, :3])
+            tmat = numpy.eye(3)
+            tmat[[0, 1, 2], [0, 1, 2]] = 1.0 / numpy.array(scale)
+            self.index2CoordA[:3, :3] = numpy.dot(tmat, self.index2CoordA[:3, :3])
             self.coord2IndexA = inv(self.index2CoordA)
 
         self._updateI()
@@ -1073,15 +1073,15 @@ class Scan:
         if copy:
             I = downscale_local_mean(self.I, factors, cval, clip)
             newScan = Scan(str(self.name) + '_downscaled_{}-{}-{}'.format(*factors))
-            newVoxelSpacing = scipy.array(self.voxelSpacing) * scipy.array(factors)
-            newVoxelOrigin = scipy.array(self.voxelOrigin)
+            newVoxelSpacing = numpy.array(self.voxelSpacing) * numpy.array(factors)
+            newVoxelOrigin = numpy.array(self.voxelOrigin)
 
             if self.USE_DICOM_AFFINE:
                 newScan.USE_DICOM_AFFINE = True
-                tmat = scipy.eye(3)
+                tmat = numpy.eye(3)
                 tmat[[0, 1, 2], [0, 1, 2]] = factors
-                i2cmat = scipy.array(self.index2CoordA)
-                i2cmat[:3, :3] = scipy.dot(tmat, i2cmat[:3, :3])
+                i2cmat = numpy.array(self.index2CoordA)
+                i2cmat[:3, :3] = numpy.dot(tmat, i2cmat[:3, :3])
                 c2imat = inv(i2cmat)
             else:
                 i2cmat = c2imat = None
@@ -1096,10 +1096,10 @@ class Scan:
             print('New image shape: {}'.format(self.I.shape))
             self._updateI()
             if self.USE_DICOM_AFFINE:
-                tmat = scipy.eye(3)
+                tmat = numpy.eye(3)
                 tmat[[0, 1, 2], [0, 1, 2]] = factors
-                i2cmat = scipy.array(self.index2CoordA)
-                i2cmat[:3, :3] = scipy.dot(tmat, i2cmat[:3, :3])
+                i2cmat = numpy.array(self.index2CoordA)
+                i2cmat[:3, :3] = numpy.dot(tmat, i2cmat[:3, :3])
                 self.set_i2c_mat(i2cmat)
             else:
                 for i in range(len(self.voxelSpacing)):
@@ -1111,10 +1111,10 @@ class Scan:
         mapping output to input. Will try to predict the output size 
         needed to capture the whole transformed image
         """
-        matrix = scipy.array(matrix)
+        matrix = numpy.array(matrix)
         # ~ S = self.I.shape
         # ~ if len( matrix.shape ) > 1:
-        # ~ box = scipy.array( [[0.0,0.0,0.0,1.0],\
+        # ~ box = numpy.array( [[0.0,0.0,0.0,1.0],\
         # ~ [S[0],0.0,0.0,1.0],\
         # ~ [0.0,S[1],0.0,1.0],\
         # ~ [S[0],S[1],0.0,1.0],\
@@ -1123,12 +1123,12 @@ class Scan:
         # ~ [0.0,S[1],S[2],1.0],\
         # ~ [S[0],S[1],S[2],1.0]] ).transpose()
         # ~
-        # ~ newBox = scipy.dot( inv(matrix), box[:3,:] )
-        # ~ outputShape = scipy.array( [ newBox[0].max() - newBox[0].min(),\
+        # ~ newBox = numpy.dot( inv(matrix), box[:3,:] )
+        # ~ outputShape = numpy.array( [ newBox[0].max() - newBox[0].min(),\
         # ~ newBox[1].max() - newBox[1].min(),\
         # ~ newBox[2].max() - newBox[2].min() ] ).round()
         # ~ else:
-        # ~ outputShape = scipy.multiply( S, matrix ).round()
+        # ~ outputShape = numpy.multiply( S, matrix ).round()
 
         outputShape = self.getAffineOutputShape(matrix)
 
@@ -1144,10 +1144,10 @@ class Scan:
         return
 
     def getAffineOutputShape(self, matrix):
-        matrix = scipy.array(matrix)
+        matrix = numpy.array(matrix)
         S = self.I.shape
         if len(matrix.shape) > 1:
-            box = scipy.array([[0.0, 0.0, 0.0, 1.0], \
+            box = numpy.array([[0.0, 0.0, 0.0, 1.0], \
                                [S[0], 0.0, 0.0, 1.0], \
                                [0.0, S[1], 0.0, 1.0], \
                                [S[0], S[1], 0.0, 1.0], \
@@ -1156,17 +1156,17 @@ class Scan:
                                [0.0, S[1], S[2], 1.0], \
                                [S[0], S[1], S[2], 1.0]]).transpose()
 
-            newBox = scipy.dot(inv(matrix), box)
+            newBox = numpy.dot(inv(matrix), box)
 
-            # ~ outputShape = scipy.array( [ newBox[0].max() - newBox[0].min(),\
+            # ~ outputShape = numpy.array( [ newBox[0].max() - newBox[0].min(),\
             # ~ newBox[1].max() - newBox[1].min(),\
             # ~ newBox[2].max() - newBox[2].min() ] ).round()
 
-            outputShape = scipy.array([newBox[0].max(), \
+            outputShape = numpy.array([newBox[0].max(), \
                                        newBox[1].max(), \
                                        newBox[2].max()]).round()
         else:
-            outputShape = scipy.multiply(S, matrix).round()
+            outputShape = numpy.multiply(S, matrix).round()
 
         return outputShape
 
@@ -1188,11 +1188,11 @@ class Scan:
             print("pad ERROR: invalid dimension")
             return None
 
-        newsize = scipy.zeros(dim)
+        newsize = numpy.zeros(dim)
         for i in range(0, dim):
             newsize[i] = self.I.shape[i] + (2 * t)
 
-        new = scipy.zeros(newsize, self.I.dtype)
+        new = numpy.zeros(newsize, self.I.dtype)
         new = new + padval
 
         if dim == 1:
@@ -1211,7 +1211,7 @@ class Scan:
         """ crop self.I to a box bounding non-zero voxels padded by pad
         voxels with value padv
         """
-        nz = scipy.nonzero(self.I)
+        nz = numpy.nonzero(self.I)
         xrange = [nz[0].max(), nz[0].min()]
         yrange = [nz[1].max(), nz[1].min()]
         zrange = [nz[2].max(), nz[2].min()]
@@ -1221,7 +1221,7 @@ class Scan:
         # ~ print yrange
         # ~ print zrange
 
-        cropArray = scipy.zeros([
+        cropArray = numpy.zeros([
             xrange[0] - xrange[1] + 2 * pad + 1,
             yrange[0] - yrange[1] + 2 * pad + 1,
             zrange[0] - zrange[1] + 2 * pad + 1], dtype=self.I.dtype)
@@ -1268,11 +1268,11 @@ class Scan:
         if replaceValue == None:
             replaceValue = self.I
         if inplace:
-            temp = scipy.where(self.I > lower, replaceValue, outsideValue)
+            temp = numpy.where(self.I > lower, replaceValue, outsideValue)
             self.setImageArray(temp)
             return 1
         else:
-            return scipy.where(self.I > lower, self.I, outsideValue)
+            return numpy.where(self.I > lower, self.I, outsideValue)
 
     # ==================================================================#
     def sampleImage(self, samplePoints, maptoindices=0, outputType=float, order=1, zShift=True, negSpacing=False):
@@ -1296,14 +1296,14 @@ class Scan:
     # ==================================================================#
     def getMIP(self, axis, sliceRange=None):
         if sliceRange == None:
-            mip = scipy.fliplr(self.I.max(axis).T)
+            mip = numpy.fliplr(self.I.max(axis).T)
         else:
             if axis == 0:
-                mip = scipy.fliplr(self.I[sliceRange[0]:sliceRange[1], :, :].max(axis).T)
+                mip = numpy.fliplr(self.I[sliceRange[0]:sliceRange[1], :, :].max(axis).T)
             elif axis == 1:
-                mip = scipy.fliplr(self.I[:, sliceRange[0]:sliceRange[1], :].max(axis).T)
+                mip = numpy.fliplr(self.I[:, sliceRange[0]:sliceRange[1], :].max(axis).T)
             elif axis == 2:
-                mip = scipy.fliplr(self.I[:, :, sliceRange[0]:sliceRange[1]].max(axis).T)
+                mip = numpy.fliplr(self.I[:, :, sliceRange[0]:sliceRange[1]].max(axis).T)
         return mip
 
     def viewMIP(self, axis, sliceRange=None, vmin=-200, vmax=2000):
@@ -1313,14 +1313,14 @@ class Scan:
 
     def getSIP(self, axis, sliceRange=None):
         if sliceRange == None:
-            sip = scipy.fliplr(self.I.sum(axis).T)
+            sip = numpy.fliplr(self.I.sum(axis).T)
         else:
             if axis == 0:
-                sip = scipy.fliplr(self.I[sliceRange[0]:sliceRange[1], :, :].sum(axis).T)
+                sip = numpy.fliplr(self.I[sliceRange[0]:sliceRange[1], :, :].sum(axis).T)
             elif axis == 1:
-                sip = scipy.fliplr(self.I[:, sliceRange[0]:sliceRange[1], :].sum(axis).T)
+                sip = numpy.fliplr(self.I[:, sliceRange[0]:sliceRange[1], :].sum(axis).T)
             elif axis == 2:
-                sip = scipy.fliplr(self.I[:, :, sliceRange[0]:sliceRange[1]].sum(axis).T)
+                sip = numpy.fliplr(self.I[:, :, sliceRange[0]:sliceRange[1]].sum(axis).T)
         return sip
 
     def viewSIP(self, axis, sliceRange=None):
@@ -1380,7 +1380,7 @@ class Scan:
 
     def getImageQCT(self, dtype=None):
         if dtype == None:
-            dtype = scipy.int16
+            dtype = numpy.int16
         IBMD = self.qCT.int2BMD(self.I).astype(dtype)
         return IBMD
 
@@ -1389,8 +1389,8 @@ class qCTLookup(object):
     sigmaOffset = -0.2174
     betaOffset = +999.6
 
-    H2ODensity = scipy.array([1012.2, 1057, 1103.6, 1119.5, 923.2])
-    K2HPO4Density = scipy.array([-51.8, -53.4, 58.9, 157, 375.8])
+    H2ODensity = numpy.array([1012.2, 1057, 1103.6, 1119.5, 923.2])
+    K2HPO4Density = numpy.array([-51.8, -53.4, 58.9, 157, 375.8])
 
     def __init__(self):
         self.phantomValues = None
@@ -1401,9 +1401,9 @@ class qCTLookup(object):
         self.stderr = None
 
     def setPhantomValues(self, x):
-        self.phantomValues = scipy.array(x)
+        self.phantomValues = numpy.array(x)
         if len(self.phantomValues.shape) == 2:
-            self.phantomValuesMinusWater = self.phantomValues - self.H2ODensity[:, scipy.newaxis]
+            self.phantomValuesMinusWater = self.phantomValues - self.H2ODensity[:, numpy.newaxis]
         elif len(self.phantomValues.shape) == 1:
             self.phantomValuesMinusWater = self.phantomValues - self.H2ODensity
         else:
@@ -1441,10 +1441,10 @@ class qCTLookup(object):
 
 class phantomSampler(object):
     phantomImageFilename = '../CT_scans/phantom_template_2008_0909.npy'
-    phantomImageSpacing = scipy.array([1.19, 1.19, 1.6])
+    phantomImageSpacing = numpy.array([1.19, 1.19, 1.6])
     phantomMidY = 16
     nRods = 5
-    phantomRodCentres = scipy.array([
+    phantomRodCentres = numpy.array([
         [40, 15],
         [65, 13],
         [88, 12],
@@ -1471,11 +1471,11 @@ class phantomSampler(object):
 
     def setScan(self, scan):
         self.scan = scan
-        self.scanSampleCoords = scipy.arange(0, self.scan.I.shape[0] - 1, self.res / self.scan.voxelSpacing[0])
+        self.scanSampleCoords = numpy.arange(0, self.scan.I.shape[0] - 1, self.res / self.scan.voxelSpacing[0])
 
     def loadPhantomTemplate(self):
-        self.phantomImage = scipy.load(self.phantomImageFilename).astype(scipy.int16)
-        self.phantomSampleCoords = scipy.arange(0, self.phantomImage.shape[0] - 1,
+        self.phantomImage = numpy.load(self.phantomImageFilename).astype(numpy.int16)
+        self.phantomSampleCoords = numpy.arange(0, self.phantomImage.shape[0] - 1,
                                                 self.res / self.phantomImageSpacing[0])
 
     def samplePhantoms(self, useSamples='all'):
@@ -1504,7 +1504,7 @@ class phantomSampler(object):
         return self.rodValues
 
     def _calcRodValues(self, mode):
-        self.rodSamples = scipy.array(self.rodSamples)
+        self.rodSamples = numpy.array(self.rodSamples)
         if len(self.rodSamples) == 0:
             raise PhantomError
 
@@ -1515,13 +1515,13 @@ class phantomSampler(object):
             self.rodValues = self.rodSamples.mean(0).mean(1).mean(1)
         elif mode == 'all':
             # all values for each rod
-            self.rodValues = scipy.array([self.rodSamples[:, i, :, :].flatten() for i in range(self.nRods)])
+            self.rodValues = numpy.array([self.rodSamples[:, i, :, :].flatten() for i in range(self.nRods)])
 
         return self.rodValues
 
     def _scanProfile(self, p, func, filterLength):
-        pPadded = scipy.hstack((p, [p[-1]] * (filterLength - 1)))
-        out = scipy.zeros(len(p))
+        pPadded = numpy.hstack((p, [p[-1]] * (filterLength - 1)))
+        out = numpy.zeros(len(p))
         for i in range(len(p)):
             out[i] = func(pPadded[i:i + filterLength])
         return out
@@ -1540,7 +1540,7 @@ class phantomSampler(object):
             return ((x - tempP) ** 2.0).sum()
 
         errors = []
-        bestErr = scipy.inf
+        bestErr = numpy.inf
         bestProfile = None
 
         for i, y in enumerate(self.yRange):
@@ -1554,11 +1554,11 @@ class phantomSampler(object):
                 bestErr = err[errMinArg]
                 bestProfile = dataPRaw
 
-        errors = scipy.array(errors)
+        errors = numpy.array(errors)
         x = errors.argmin()
         # scanned image coords
         x1 = x / errors.shape[1]
-        x2 = x - (x1 * errors.shape[1])  # scipy.mod(x,matchProfiles.shape[1])
+        x2 = x - (x1 * errors.shape[1])  # numpy.mod(x,matchProfiles.shape[1])
         # main image coords
         X1 = x1 * self.yRangeLim[2] + self.yRangeLim[0]
         X2 = float(x2) * self.res / self.scan.voxelSpacing[0]
@@ -1580,7 +1580,7 @@ class phantomSampler(object):
                               scanSlice]
                               )
 
-        return scipy.array(rodSamples)
+        return numpy.array(rodSamples)
 
 
 # ======================================================================#
@@ -1612,7 +1612,7 @@ class Slice:
         """ calculate self.I's centre of mass
         """
         # large numbers are involved
-        I = self.I.astype(scipy.int64)
+        I = self.I.astype(numpy.int64)
 
         # mass
         self.M00 = float(I.sum())
@@ -1623,11 +1623,11 @@ class Slice:
             self.isZeroMass = True
             return
         else:
-            i0 = scipy.arange(I.shape[0])
-            i1 = scipy.arange(I.shape[1])
+            i0 = numpy.arange(I.shape[0])
+            i1 = numpy.arange(I.shape[1])
             # centre of mass        
-            self.CoM[0] = scipy.dot(I.sum(1), i0) / self.M00
-            self.CoM[1] = scipy.dot(I.sum(0), i1) / self.M00
+            self.CoM[0] = numpy.dot(I.sum(1), i0) / self.M00
+            self.CoM[1] = numpy.dot(I.sum(0), i1) / self.M00
 
             # centered voxel coordinates
             self._iC = (i0 - self.CoM[0], i1 - self.CoM[1])
@@ -1645,7 +1645,7 @@ class Slice:
             print('WARNING: Scan.calculatePrincipalAxes: zero-mass object')
             return
 
-        self.momentMatrix = scipy.zeros((2, 2))
+        self.momentMatrix = numpy.zeros((2, 2))
 
         # populate inertial matrix
         self.momentMatrix[0, 0] = self._calcCentralMoment(2, 0, 0)
@@ -1692,15 +1692,15 @@ class Slice:
         """
 
         # get all nonzero point indices
-        xi, yi = scipy.nonzero(self.I)
+        xi, yi = numpy.nonzero(self.I)
         # center
         xi = xi - self.CoM[0]
         yi = yi - self.CoM[1]
         nTotal = xi.shape[0]
 
         # convert all point indices into radial coordinates
-        R = scipy.sqrt(xi ** 2.0 + yi ** 2.0)  # r
-        theta = scipy.zeros(nTotal)
+        R = numpy.sqrt(xi ** 2.0 + yi ** 2.0)  # r
+        theta = numpy.zeros(nTotal)
         for i in range(nTotal):
             theta[i] = calcTheta(xi[i], yi[i])  # theta
 
@@ -1719,7 +1719,7 @@ class Slice:
             self.calculateSlicePolar()
 
         X, Y = self.I.nonzero()
-        tList = scipy.linspace(0.0, 2 * scipy.pi, n + 1)[:-1]
+        tList = numpy.linspace(0.0, 2 * numpy.pi, n + 1)[:-1]
         m = 5  # average of 5 closest
         tempX = 0.0
         tempY = 0.0
@@ -1753,16 +1753,16 @@ class Slice:
             self.fitSplinePolar()
 
         # evaluate n points in polar coords [[theta,r],[theta,r],...]
-        theta = scipy.linspace(self.theta.min(), self.theta.max(), n + 1)
-        polarPoints = scipy.zeros((n, 2))
+        theta = numpy.linspace(self.theta.min(), self.theta.max(), n + 1)
+        polarPoints = numpy.zeros((n, 2))
         for i in range(theta.shape[0] - 1):
             polarPoints[i, 0] = theta[i]
             polarPoints[i, 1] = self.polarSpline(theta[i])
 
         # transform to cartesian coords [[x,y],[x,y],...]
-        cartPoints = scipy.zeros((n, 2))
-        cartPoints[:, 0] = polarPoints[:, 1] * scipy.cos(polarPoints[:, 0])
-        cartPoints[:, 1] = polarPoints[:, 1] * scipy.sin(polarPoints[:, 0])
+        cartPoints = numpy.zeros((n, 2))
+        cartPoints[:, 0] = polarPoints[:, 1] * numpy.cos(polarPoints[:, 0])
+        cartPoints[:, 1] = polarPoints[:, 1] * numpy.sin(polarPoints[:, 0])
 
         if coords == 'stack':
             stackPoints = self.slice2StackCS(cartPoints)
@@ -1784,16 +1784,16 @@ class Slice:
             self.fitSplinePolar()
 
         # evaluate n points in polar coords [[theta,r],[theta,r],...]
-        theta = scipy.linspace(0.0, 2 * scipy.pi, n + 1)
-        polarPoints = scipy.zeros((n, 2))
+        theta = numpy.linspace(0.0, 2 * numpy.pi, n + 1)
+        polarPoints = numpy.zeros((n, 2))
         for i in range(theta.shape[0] - 1):
             polarPoints[i, 0] = theta[i]
             polarPoints[i, 1] = self.polarSpline(theta[i])
 
         # transform to cartesian coords [[x,y],[x,y],...]
-        cartPoints = scipy.zeros((n, 2))
-        cartPoints[:, 0] = polarPoints[:, 1] * scipy.cos(polarPoints[:, 0])
-        cartPoints[:, 1] = polarPoints[:, 1] * scipy.sin(polarPoints[:, 0])
+        cartPoints = numpy.zeros((n, 2))
+        cartPoints[:, 0] = polarPoints[:, 1] * numpy.cos(polarPoints[:, 0])
+        cartPoints[:, 1] = polarPoints[:, 1] * numpy.sin(polarPoints[:, 0])
 
         if coords == 'stack':
             stackPoints = self.slice2StackCS(cartPoints)
@@ -1818,12 +1818,12 @@ class Slice:
         theta = self.theta.copy()
         sortI = theta.argsort()
         theta.sort()
-        RSort = scipy.zeros(self.R.shape)
+        RSort = numpy.zeros(self.R.shape)
         for i in range(sortI.shape[0]):
             RSort[i] = self.R[sortI[i]]
 
-        # ~ k = scipy.linspace( 0.0, 2*scipy.pi, nk )
-        k = scipy.linspace(theta.min(), theta.max(), nk)
+        # ~ k = numpy.linspace( 0.0, 2*numpy.pi, nk )
+        k = numpy.linspace(theta.min(), theta.max(), nk)
         self.polarSpline = LSQUnivariateSpline(theta, RSort, k[1:-1], k=order)
 
         return self.polarSpline.get_residual()
@@ -1838,7 +1838,7 @@ class Slice:
 
         # data
         data = self.I.nonzero()
-        data = scipy.array(data).transpose()
+        data = numpy.array(data).transpose()
 
         fitErr = self.quadratic.fit(data)
         return fitErr
@@ -1846,10 +1846,10 @@ class Slice:
     # ==================================================================#
     def _initQuadratic(self):
         # initialise curve 
-        p0 = scipy.array(self.CoM) - self.I.shape[0] * 0.5 * self.pAxes[:, 1]
-        p1 = scipy.array(self.CoM)
-        p2 = scipy.array(self.CoM) + self.I.shape[0] * 0.5 * self.pAxes[:, 1]
-        initParams = scipy.transpose([p0, p1, p2])
+        p0 = numpy.array(self.CoM) - self.I.shape[0] * 0.5 * self.pAxes[:, 1]
+        p1 = numpy.array(self.CoM)
+        p2 = numpy.array(self.CoM) + self.I.shape[0] * 0.5 * self.pAxes[:, 1]
+        initParams = numpy.transpose([p0, p1, p2])
         # ~ print 'initial quadratic parameters:', initParams
         self.quadratic = quadraticCurve(2, initParams)
         return self.quadratic
@@ -1867,17 +1867,17 @@ class Slice:
         if self.polarSpline:
             n = 100
             p = self.samplePointsInThetaRangeSpline(n, coords='sliceInd')
-            # ~ p = scipy.vstack( [p, p[0]] )
+            # ~ p = numpy.vstack( [p, p[0]] )
             plot.plot(p[:, 1], p[:, 0])
 
         if self.quadratic:
             n = 100
-            U = scipy.linspace(0.0, 1.0, n)
+            U = numpy.linspace(0.0, 1.0, n)
             p = []
             for u in U:
                 p.append(self.quadratic.eval(u))
 
-            p = scipy.array(p).transpose()
+            p = numpy.array(p).transpose()
             plot.plot(p[1], p[0])
             centre = self.quadratic.params[:, 1]
             plot.plot(centre[1], centre[0], 'scatter')
@@ -1903,15 +1903,15 @@ class Slice:
         P = self.origin
         N = self.normal
         self.sliceV0 = N  # z
-        self.sliceV1 = norm(scipy.subtract([evalPlaneZ(P, N, P[2] + 1.0, P[1] + 1.0), P[1] + 1.0, P[2] + 1.0], P))  # y
-        # ~ sliceV1 = norm( scipy.subtract( [evalPlaneZ( P, N, P[2]+1.0, P[1] ), P[1], P[2]+1.0 ], P ) ) # y
-        self.sliceV2 = scipy.cross(self.sliceV0, self.sliceV1)  # x
+        self.sliceV1 = norm(numpy.subtract([evalPlaneZ(P, N, P[2] + 1.0, P[1] + 1.0), P[1] + 1.0, P[2] + 1.0], P))  # y
+        # ~ sliceV1 = norm( numpy.subtract( [evalPlaneZ( P, N, P[2]+1.0, P[1] ), P[1], P[2]+1.0 ], P ) ) # y
+        self.sliceV2 = numpy.cross(self.sliceV0, self.sliceV1)  # x
         return
 
 
 # ======================================================================#
 # def writeSlice( imageArray, prefix, sliceDim=0 ):
-#   numLength = int( scipy.log10( imageArray.shape[sliceDim] ) ) + 2
+#   numLength = int( numpy.log10( imageArray.shape[sliceDim] ) ) + 2
 
 #   if sliceDim==0:
 #       for i in range( imageArray.shape[sliceDim]):
@@ -1942,11 +1942,11 @@ def pad(array, t, padval=0):
         print("pad ERROR: invalid dimension")
         return None
 
-    newsize = scipy.zeros(dim)
+    newsize = numpy.zeros(dim)
     for i in range(0, dim):
         newsize[i] = array.shape[i] + (2 * t)
 
-    new = scipy.zeros(newsize, array.dtype)
+    new = numpy.zeros(newsize, array.dtype)
     new = new + padval
 
     if dim == 1:
@@ -1962,8 +1962,8 @@ def pad(array, t, padval=0):
 # ======================================================================#
 def nz_stats(array, return_val=0):
     print("Non-zero element stats:")
-    nz = scipy.nonzero(array)
-    values = scipy.zeros([nz[0].shape[0]], dtype=int)
+    nz = numpy.nonzero(array)
+    values = numpy.zeros([nz[0].shape[0]], dtype=int)
     for i in range(0, nz[0].shape[0]):
         values[i] = array[nz[0][i], nz[1][i], nz[2][i]]
 
@@ -1991,8 +1991,8 @@ def evalPlaneZ(P, N, x, y):
     """ evaluate z coords of a point x,y on a plane defined by P and N.
     """
     tol = 0.000001
-    P = scipy.array(P, dtype=float)
-    N = scipy.array(N, dtype=float)
+    P = numpy.array(P, dtype=float)
+    N = numpy.array(N, dtype=float)
     N = norm(N)
     if abs(N[2]) < tol:
         print('WARNING: evalPlaneZ: zero normal z component')
@@ -2006,14 +2006,14 @@ def evalPlaneZ(P, N, x, y):
 
 # ======================================================================#
 def norm(v):
-    return scipy.divide(v, scipy.sqrt((v ** 2.0).sum()))
+    return numpy.divide(v, numpy.sqrt((v ** 2.0).sum()))
 
 
 # ======================================================================#
 def mag(v):
     """ calc |v|
     """
-    return scipy.sqrt((v ** 2.0).sum())
+    return numpy.sqrt((v ** 2.0).sum())
 
 
 # ======================================================================#
@@ -2021,15 +2021,15 @@ def calcTheta(x, y):
     """ angle anticlockwise from the +ve x axis of a point (x,y)
     """
 
-    s = (scipy.sign(x), scipy.sign(y))
+    s = (numpy.sign(x), numpy.sign(y))
     case = {(1.0, 0.0): 0.0, \
-            (1.0, 1.0): scipy.arctan(y / x), \
-            (0.0, 1.0): scipy.pi / 2.0, \
-            (-1.0, 1.0): scipy.pi + scipy.arctan(y / x), \
-            (-1.0, 0.0): scipy.pi, \
-            (-1.0, -1.0): scipy.pi + scipy.arctan(y / x), \
-            (0.0, -1.0): scipy.pi * 1.5, \
-            (1.0, -1.0): 2 * scipy.pi + scipy.arctan(y / x)}
+            (1.0, 1.0): numpy.arctan(y / x), \
+            (0.0, 1.0): numpy.pi / 2.0, \
+            (-1.0, 1.0): numpy.pi + numpy.arctan(y / x), \
+            (-1.0, 0.0): numpy.pi, \
+            (-1.0, -1.0): numpy.pi + numpy.arctan(y / x), \
+            (0.0, -1.0): numpy.pi * 1.5, \
+            (1.0, -1.0): 2 * numpy.pi + numpy.arctan(y / x)}
 
     return case[s]
 
@@ -2059,13 +2059,13 @@ class quadraticCurve(object):
         if d == 0:
             for p in self.params:
                 # ~ print 'p:', p
-                ret.append(scipy.dot(self._basis0(t), p))
+                ret.append(numpy.dot(self._basis0(t), p))
         elif d == 1:
             for p in self.params:
-                ret.append(scipy.dot(self._basis1(t), p))
+                ret.append(numpy.dot(self._basis1(t), p))
         elif d == 2:
             for p in self.params:
-                ret.append(scipy.dot(self._basis2(t), p))
+                ret.append(numpy.dot(self._basis2(t), p))
 
         return ret
 
@@ -2109,12 +2109,12 @@ class quadraticCurve(object):
         print('\nfitting...\n')
         print('data shape:', data.shape)
         self.fitData = data
-        x0 = scipy.array(self.params).ravel()
+        x0 = numpy.array(self.params).ravel()
         xOpt = leastsq(self._fitLsqObj, x0, xtol=self.fitTol, ftol=self.fitTol)[0]
 
         print('\nXopt:', xOpt)
         finalErr = self._fitLsqObj(xOpt)
-        finalRMS = scipy.sqrt(finalErr.mean())
+        finalRMS = numpy.sqrt(finalErr.mean())
 
         return finalRMS
 
@@ -2122,19 +2122,19 @@ class quadraticCurve(object):
         """ x are the coords of the 3 nodes
         """
         # ~ print x
-        self.setParams(scipy.reshape(x, (self.dimension, 3)))
+        self.setParams(numpy.reshape(x, (self.dimension, 3)))
         return self._projectLsqError()
 
     def _projectLsqError(self):
         """ calculate RMS error between datapoints and their projection
         on the curve. data = [[xyz],[xyz],...]
         """
-        err = scipy.zeros(self.fitData.shape[0])
+        err = numpy.zeros(self.fitData.shape[0])
         for i in range(self.fitData.shape[0]):
             err[i] = euclidean(self.fitData[i], self.findClosest(self.fitData[i])[0])
 
-        err = scipy.array(err)
-        rms = scipy.sqrt((err ** 2.0).mean())
+        err = numpy.array(err)
+        rms = numpy.sqrt((err ** 2.0).mean())
         print('rms error:', rms)
         # ~ return rms
 
@@ -2169,15 +2169,15 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     minz = max(0, minz)
     print('cropping max:', maxx, maxy, maxz)
     print('cropping min:', minx, miny, minz)
-    cropOffset = scipy.array([minx, miny, minz])
+    cropOffset = numpy.array([minx, miny, minz])
     if not negSpacing:
         if zShift:
-            zCorrection = scan.voxelSpacing[2] * scipy.array([0.0, 0.0, (maxz - minz - scan.I.shape[2])])
+            zCorrection = scan.voxelSpacing[2] * numpy.array([0.0, 0.0, (maxz - minz - scan.I.shape[2])])
         else:
             zCorrection = [0, 0, 0]
     else:
         zCorrection = [0, 0, 0]
-    # zCorrection = scan.voxelSpacing[2] * scipy.array([ 0.0, 0.0, (maxz-minz) ])
+    # zCorrection = scan.voxelSpacing[2] * numpy.array([ 0.0, 0.0, (maxz-minz) ])
     # newScanOffset = scan.voxelOffset-cropOffset*scan.voxelSpacing+zCorrection
     # newScanOffset = scan.voxelOrigin-cropOffset*scan.voxelSpacing+zCorrection
     newScanOrigin = scan.voxelOrigin + offsetXYCoeff * cropOffset * scan.voxelSpacing + zCorrection
@@ -2186,7 +2186,7 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     # calculate new affine matrices
     if scan.USE_DICOM_AFFINE:
         i2cmat = scan.index2CoordA.copy()
-        i2cmat[:3, 3] = scan.index2Coord(scipy.array([cropOffset, ])).squeeze()
+        i2cmat[:3, 3] = scan.index2Coord(numpy.array([cropOffset, ])).squeeze()
         c2imat = inv(i2cmat)
     else:
         i2cmat = None

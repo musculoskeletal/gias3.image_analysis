@@ -28,7 +28,7 @@ if USECYTHON:
         reload_support=True,
         language_level=3
     )
-    from gias.image_analysis import integralimagec as IIC
+    from gias2.image_analysis import integralimagec as IIC
 
 
 def makeIntegralArray2(image):

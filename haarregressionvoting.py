@@ -13,59 +13,63 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import pickle
-import sys
 import warnings
-import pdb
+
 import numpy as np
-import numpy.ma as ma
+import sys
 from sklearn.ensemble import ExtraTreesRegressor
+
 # from gias.learning.forest_voting import ExtraTreesRegressorVoter
 from gias2.image_analysis import haar
-from gias2.image_analysis import integralimage
 from gias2.image_analysis import image_tools
+from gias2.image_analysis import integralimage
+
 
 class SamplingWarning(Exception):
     pass
 
+
 class SamplingError(Exception):
     pass
 
+
 def extractHaarFeatures(II, p, windowSize, haarMode='diff'):
-    X = np.round(p - np.array(windowSize)/2.0).astype(int)
-    if haarMode=='diff':
+    X = np.round(p - np.array(windowSize) / 2.0).astype(int)
+    if haarMode == 'diff':
         return haar.extractAllHaar3DDiff(II, X, windowSize)
-    elif haarMode=='reldiff':
+    elif haarMode == 'reldiff':
         return haar.extractAllHaar3DRelDiff(II, X, windowSize)
-    elif haarMode=='sign':
+    elif haarMode == 'sign':
         return haar.extractAllHaar3DSign(II, X, windowSize)
 
-def makeHaarFeatureExtractor(II, haarMode):
 
-    if haarMode=='diff':
+def makeHaarFeatureExtractor(II, haarMode):
+    if haarMode == 'diff':
         def haarFeatureExtractor(p, w):
-            X = np.round(p - w/2.0).astype(int)
+            X = np.round(p - w / 2.0).astype(int)
             return haar.extractAllHaar3DDiff(II, X.T, w.T.astype(int))
-    elif haarMode=='reldiff':
+    elif haarMode == 'reldiff':
         def haarFeatureExtractor(p, w):
-            X = np.round(p - w/2.0).astype(int)
+            X = np.round(p - w / 2.0).astype(int)
             return haar.extractAllHaar3DRelDiff(II, X.T, w.T.astype(int))
-    elif haarMode=='sign':
+    elif haarMode == 'sign':
         def haarFeatureExtractor(p, w):
-            X = np.round(p - w/2.0).astype(int)
+            X = np.round(p - w / 2.0).astype(int)
             return haar.extractAllHaar3DSign(II, X.T, w.T.astype(int))
     else:
         raise ValueError('invalid haarMode')
 
     return haarFeatureExtractor
 
-class HaarImage( image_tools.Scan ):
+
+class HaarImage(image_tools.Scan):
     """
     Class for 3D image for sampling 3D Haar features. Inherits from 
     image_tools.Scan. An integral image is generated on instantiation
     """
 
-    windowSize = (10,10,10) # size of volume to sample around each landmark
-    samplesPerPoint = 10    # number volumes to sample around each landmark
+    windowSize = (10, 10, 10)  # size of volume to sample around each landmark
+    samplesPerPoint = 10  # number volumes to sample around each landmark
     reader = None
 
     def __init__(self, I=None, voxelSpacing=None, voxelOrigin=None, isMasked=False):
@@ -91,19 +95,19 @@ class HaarImage( image_tools.Scan ):
         del self.II
 
     def _setImageArray(self, I, voxelSpacing=None, voxelOrigin=None):
-        if len(I.shape)!=3:
+        if len(I.shape) != 3:
             raise ValueError('image must be 3D')
 
         self.I = I
         self.II = integralimage.IntegralImage3(self.I)
 
         if voxelSpacing is None:
-            self.voxelSpacing = np.array([1.0,1.0,1.0])
+            self.voxelSpacing = np.array([1.0, 1.0, 1.0])
         else:
-            self.voxelSpacing = voxelSpacing        
+            self.voxelSpacing = voxelSpacing
 
         if voxelOrigin is None:
-            self.voxelOrigin = np.array([0.0,0.0,0.0])
+            self.voxelOrigin = np.array([0.0, 0.0, 0.0])
         else:
             self.voxelOrigin = voxelOrigin
 
@@ -125,12 +129,12 @@ class HaarImage( image_tools.Scan ):
         """
         p = np.array(p)
         windowSize = np.array(windowSize)
-        X = np.round(p - windowSize/2.0).astype(int)
-        if sampleMode=='diff':
+        X = np.round(p - windowSize / 2.0).astype(int)
+        if sampleMode == 'diff':
             return haar.extractAllHaar3DDiff(self.II, X, windowSize)
-        elif sampleMode=='reldiff':
+        elif sampleMode == 'reldiff':
             return haar.extractAllHaar3DRelDiff(self.II, X, windowSize)
-        elif sampleMode=='sign':
+        elif sampleMode == 'sign':
             return haar.extractAllHaar3DSign(self.II, X, windowSize)
         else:
             raise ValueError('invalid sampleMode')
@@ -165,8 +169,8 @@ class HaarImage( image_tools.Scan ):
 
         windowSize = np.array(windowSize)
         p = np.array(p)
-        displacements = np.random.uniform(low=-dMax, high=dMax, size=(n,3))
-        sampleIndices = self.coord2Index(p+displacements, zShift, negSpacing)
+        displacements = np.random.uniform(low=-dMax, high=dMax, size=(n, 3))
+        sampleIndices = self.coord2Index(p + displacements, zShift, negSpacing)
         # randomly modify windowSize too?
         # randomly alter orientation?
 
@@ -174,29 +178,30 @@ class HaarImage( image_tools.Scan ):
         for i, sInd in enumerate(sampleIndices):
             # print sInd
             try:
-                features.append( extractHaarFeatures(self.II, sInd, windowSize, haarMode) )
+                features.append(extractHaarFeatures(self.II, sInd, windowSize, haarMode))
             except IndexError:
                 retry = 1
                 while retry:
                     print('retry', retry)
                     dRetry = np.random.uniform(low=-dMax, high=dMax, size=(3))
-                    sIndRetry = self.coord2Index(p+dRetry, zShift, negSpacing)
-                    
+                    sIndRetry = self.coord2Index(p + dRetry, zShift, negSpacing)
+
                     try:
-                        features.append( extractHaarFeatures(self.II, sIndRetry, windowSize, haarMode) )
+                        features.append(extractHaarFeatures(self.II, sIndRetry, windowSize, haarMode))
                     except IndexError:
                         retry += 1
                     else:
                         displacements[i] = dRetry
                         retry = 0
                         print(sIndRetry)
-        
-        if len(features)==0:
-            warnings.warn("No suitable sampling locations, p = "+str(p) )
+
+        if len(features) == 0:
+            warnings.warn("No suitable sampling locations, p = " + str(p))
 
         return displacements, features
 
-    def extractHaarAboutPointRandomMulti(self, P, n, windowSize, dMax, zShift=False, negSpacing=False, haarMode='diff', windowSizeVar=None):
+    def extractHaarAboutPointRandomMulti(self, P, n, windowSize, dMax, zShift=False, negSpacing=False, haarMode='diff',
+                                         windowSizeVar=None):
         """
         randomly extract features in volumes randomly displaced about points P.
         Returns list of lists of features and the displacement vectors.
@@ -225,54 +230,58 @@ class HaarImage( image_tools.Scan ):
         """
 
         nPoints = P.shape[0]
-        nSamples = n*nPoints
+        nSamples = n * nPoints
         windowSize = np.array(windowSize)
         maxRetry = 10000
 
         # generate window sizes
-        if windowSizeVar!=None:
-            windowSizes = windowSize * np.random.uniform(low=1.0-windowSizeVar,
-                                                         high=1.0+windowSizeVar,
-                                                         size=nSamples)[:,np.newaxis]
+        if windowSizeVar != None:
+            windowSizes = windowSize * np.random.uniform(low=1.0 - windowSizeVar,
+                                                         high=1.0 + windowSizeVar,
+                                                         size=nSamples)[:, np.newaxis]
         else:
-            windowSizes = windowSize * np.ones(nSamples)[:,np.newaxis]
+            windowSizes = windowSize * np.ones(nSamples)[:, np.newaxis]
 
-        windowSizes = windowSizes.reshape((nPoints,n,3))
-        windowSizes2 = windowSizes/2.0
+        windowSizes = windowSizes.reshape((nPoints, n, 3))
+        windowSizes2 = windowSizes / 2.0
 
         # generate displacements
-        displacements = np.random.uniform(low=-dMax, high=dMax, size=(nSamples,3)).reshape((nPoints,n,3)) # shape = (nPoints, samples per point, 3)
-        samplePoints = displacements + P[:,np.newaxis,:]
-        sampleIndices = self.coord2Index(samplePoints.reshape((nSamples,3)), zShift, negSpacing).reshape((nPoints,n,3))
-        
+        displacements = np.random.uniform(low=-dMax, high=dMax, size=(nSamples, 3)).reshape(
+            (nPoints, n, 3))  # shape = (nPoints, samples per point, 3)
+        samplePoints = displacements + P[:, np.newaxis, :]
+        sampleIndices = self.coord2Index(samplePoints.reshape((nSamples, 3)), zShift, negSpacing).reshape(
+            (nPoints, n, 3))
+
         # randomly alter orientation?
 
         # redo out of bounds samples
         for pi, I in enumerate(sampleIndices):
             for ii, ind in enumerate(I):
-                if not (self.checkIndexInBounds(ind+windowSizes2[pi,ii]) and self.checkIndexInBounds(ind-windowSizes2[pi,ii])):
+                if not (self.checkIndexInBounds(ind + windowSizes2[pi, ii]) and self.checkIndexInBounds(
+                        ind - windowSizes2[pi, ii])):
                     retry = True
                     retryCount = 1
                     while retry:
-                        sys.stdout.write('\rretry '+str(retryCount))
+                        sys.stdout.write('\rretry ' + str(retryCount))
                         sys.stdout.flush()
 
                         # regen displacement
                         dRetry = np.random.uniform(low=-dMax, high=dMax, size=(3))
-                        indRetry = self.coord2Index(P[pi]+dRetry, zShift, negSpacing)
+                        indRetry = self.coord2Index(P[pi] + dRetry, zShift, negSpacing)
                         # regen window size
-                        if windowSizeVar!=None:
-                            wsRetry = windowSize * np.random.uniform(low=1.0-windowSizeVar,
-                                                                     high=1.0+windowSizeVar)
+                        if windowSizeVar != None:
+                            wsRetry = windowSize * np.random.uniform(low=1.0 - windowSizeVar,
+                                                                     high=1.0 + windowSizeVar)
                         else:
                             wsRetry = windowSize
 
-                        wsRetry2 = wsRetry/2.0
+                        wsRetry2 = wsRetry / 2.0
 
-                        if (self.checkIndexInBounds(indRetry+wsRetry2) and self.checkIndexInBounds(indRetry-wsRetry2)):
-                            displacements[pi,ii,:] = dRetry
-                            sampleIndices[pi,ii,:] = indRetry
-                            windowSizes[pi,ii,:] = wsRetry
+                        if (self.checkIndexInBounds(indRetry + wsRetry2) and self.checkIndexInBounds(
+                                indRetry - wsRetry2)):
+                            displacements[pi, ii, :] = dRetry
+                            sampleIndices[pi, ii, :] = indRetry
+                            windowSizes[pi, ii, :] = wsRetry
                             retry = False
                         else:
                             retryCount += 1
@@ -285,9 +294,9 @@ class HaarImage( image_tools.Scan ):
                                              windowSizes.reshape((nSamples, 3))).T
         # shape = (nPoints, n, number of features)
         features = features.reshape((nPoints, n, -1))
-        
-        if len(features)==0:
-            warnings.warn("No suitable sampling locations, p = "+str(p) )
+
+        if len(features) == 0:
+            warnings.warn("No suitable sampling locations, p = " + str(p))
 
         return displacements, features
 
@@ -314,19 +323,19 @@ class HaarImage( image_tools.Scan ):
         """
 
         try:
-            displacements = self._displacementGrids[(dMax,n)]
+            displacements = self._displacementGrids[(dMax, n)]
         except KeyError:
-            displacements = _generateSampleGrid(dMax,n)
-            self._displacementGrids[(dMax,n)] = displacements
+            displacements = _generateSampleGrid(dMax, n)
+            self._displacementGrids[(dMax, n)] = displacements
 
         # sample
-        sampleIndices = self.coord2Index(p+displacements, zShift, negSpacing)
+        sampleIndices = self.coord2Index(p + displacements, zShift, negSpacing)
 
         features = []
         featureDisplacements = []
         for i, d in enumerate(sampleIndices):
             try:
-                features.append( extractHaarFeatures(self.II, d, windowSize) )
+                features.append(extractHaarFeatures(self.II, d, windowSize))
             except IndexError:
                 # out of bounds sample, ignore
                 pass
@@ -334,14 +343,15 @@ class HaarImage( image_tools.Scan ):
                 featureDisplacements.append(displacements[i])
 
         # if all samples were out of bounds
-        if len(features)==0:
+        if len(features) == 0:
             # print sampleIndices.max(0)
             # print sampleIndices.min(0)
-            warnings.warn("No suitable sampling locations, p = "+str(p) )
-        
+            warnings.warn("No suitable sampling locations, p = " + str(p))
+
         return featureDisplacements, features
 
-    def extractHaarAboutPointGridSphereMulti(self, P, n, windowSize, dMax, zShift=False, negSpacing=False, haarMode='diff'):
+    def extractHaarAboutPointGridSphereMulti(self, P, n, windowSize, dMax, zShift=False, negSpacing=False,
+                                             haarMode='diff'):
         """
         Extract features in volumes distributed in a regular grid within a sphere of radius
         dMax about points P. n is the number of samples along the diameter. Sample volumes
@@ -364,27 +374,27 @@ class HaarImage( image_tools.Scan ):
         """
         nPoints = P.shape[0]
         windowSize = np.array(windowSize)
-        windowSize2 = windowSize/2.0
+        windowSize2 = windowSize / 2.0
         self.setHaarExtractor(haarMode)
-        
+
         try:
-            disp = self._displacementGrids[(dMax,n)]
+            disp = self._displacementGrids[(dMax, n)]
         except KeyError:
-            disp = _generateSampleGrid(dMax,n)
-            self._displacementGrids[(dMax,n)] = disp
+            disp = _generateSampleGrid(dMax, n)
+            self._displacementGrids[(dMax, n)] = disp
 
         # generate sampling points
         sampleIndices = []
         displacements = []
         nSamples = []
         for p in P:
-            samplePoints = p+disp
+            samplePoints = p + disp
             sampleIndicesTemp = self.coord2Index(samplePoints, zShift, negSpacing)
-            inBounds = np.array([(self.checkIndexInBounds(ind+windowSize2) and\
-                                 self.checkIndexInBounds(ind-windowSize2)) for ind in sampleIndicesTemp])
-            inBoundsI = np.where(inBounds==True)[0]
-            sampleIndices.append(sampleIndicesTemp[inBoundsI,:])
-            displacements.append(disp[inBoundsI,:])
+            inBounds = np.array([(self.checkIndexInBounds(ind + windowSize2) and \
+                                  self.checkIndexInBounds(ind - windowSize2)) for ind in sampleIndicesTemp])
+            inBoundsI = np.where(inBounds == True)[0]
+            sampleIndices.append(sampleIndicesTemp[inBoundsI, :])
+            displacements.append(disp[inBoundsI, :])
             nSamples.append(sampleIndices[-1].shape[0])
 
         sampleIndicesFlat = np.vstack(sampleIndices)
@@ -395,29 +405,31 @@ class HaarImage( image_tools.Scan ):
         features = []
         i = 0
         for nS in nSamples:
-            features.append(featuresTemp[i:i+nS,:])
+            features.append(featuresTemp[i:i + nS, :])
             i += nS
 
         # if all samples were out of bounds
-        if len(features)==0:
+        if len(features) == 0:
             # print sampleIndices.max(0)
             # print sampleIndices.min(0)
-            warnings.warn("No suitable sampling locations, p = "+str(p) )
-        
+            warnings.warn("No suitable sampling locations, p = " + str(p))
+
         return displacements, features
+
 
 def _generateSampleGrid(dMax, n):
     # make cube grid about origin
-    x, y, z = np.mgrid[ -dMax:dMax:complex(0,n),
-                        -dMax:dMax:complex(0,n),
-                        -dMax:dMax:complex(0,n),
-                        ]
+    x, y, z = np.mgrid[-dMax:dMax:complex(0, n),
+              -dMax:dMax:complex(0, n),
+              -dMax:dMax:complex(0, n),
+              ]
     X = np.vstack([x.ravel(), y.ravel(), z.ravel()]).T
 
     # filter out grid points outside sphere
-    d = np.sqrt((X**2.0).sum(1))
-    displacements = X[np.where(d<=dMax)[0]]
+    d = np.sqrt((X ** 2.0).sum(1))
+    displacements = X[np.where(d <= dMax)[0]]
     return displacements
+
 
 class TrainCLMRFs(object):
     """
@@ -472,18 +484,18 @@ class TrainCLMRFs(object):
         Run sampling process. Each image is loaded and sampled in sequence
         """
 
-        for i, (scan,P) in enumerate(self.trainingSamples):
+        for i, (scan, P) in enumerate(self.trainingSamples):
             print('calculating integral image')
             trainingImage = HaarImage(scan.I, scan.voxelSpacing, scan.voxelOrigin)
 
             print('sampling features')
             try:
-                pointDisplacements,\
+                pointDisplacements, \
                 pointFeatures = trainingImage.extractHaarAboutPointRandomMulti(
-                                    P, self.nSamples, self.windowSize, self.dMax,
-                                    zShift=self.zShift, negSpacing=self.negSpacing,
-                                    haarMode=self.haarMode,
-                                    windowSizeVar=self.windowSizeVar)
+                    P, self.nSamples, self.windowSize, self.dMax,
+                    zShift=self.zShift, negSpacing=self.negSpacing,
+                    haarMode=self.haarMode,
+                    windowSizeVar=self.windowSizeVar)
             except SamplingError:
                 print('WARNING: skipped due to out of bounds sampling')
             else:
@@ -509,12 +521,12 @@ class TrainCLMRFs(object):
         self.RFs = []
         for i in range(self.nPoints):
             sys.stdout.flush()
-            sys.stdout.write('\rpoint %5i/%5i'%(i+1,self.nPoints))
+            sys.stdout.write('\rpoint %5i/%5i' % (i + 1, self.nPoints))
             # print len(self.pointFeatures[i]), self.pointFeatures[i][0]
             # print len(self.pointDisplacements[i]), self.pointDisplacements[i][0]
 
-            pointDisplacements = self.pointDisplacements[i,:,:]
-            pointFeatures = self.pointFeatures[i,:,:]
+            pointDisplacements = self.pointDisplacements[i, :, :]
+            pointFeatures = self.pointFeatures[i, :, :]
 
             # print pointDisplacements.shape
             # print pointFeatures.shape
@@ -539,8 +551,9 @@ def saveRFs(RFs, filename):
     RFs: a list of sklearn.ensemble.ExtraTreesRegressor instances.
     filename: string
     """
-    with open(filename,'w') as f:
+    with open(filename, 'w') as f:
         pickle.dump(RFs, f, protocol=2)
+
 
 def loadRFs(filename):
     """
@@ -551,14 +564,15 @@ def loadRFs(filename):
     return:
     RFs: a list of sklearn.ensemble.ExtraTreesRegressor instances. 
     """
-    with open(filename,'r') as f:
+    with open(filename, 'r') as f:
         RFs = pickle.load(f)
 
     return RFs
 
-#========================================================#
+
+# ========================================================#
 # voting collecting functions                            #
-#========================================================#
+# ========================================================#
 
 def collectVoteCoMStd(displacementVotes, samplePoints):
     """
@@ -569,7 +583,7 @@ def collectVoteCoMStd(displacementVotes, samplePoints):
     # left-right flip hack
     # displacementVotes[:,0] = displacementVotes[:,0]*-1.0
     ######################
-    voteCoords = samplePoints - displacementVotes   # minus because RFs are trained on displacements from landmarks to a sample point, now it is the reverse
+    voteCoords = samplePoints - displacementVotes  # minus because RFs are trained on displacements from landmarks to a sample point, now it is the reverse
     CoM = voteCoords.mean(0)
-    std = np.sqrt(((voteCoords - CoM)**2.0).sum(1)).std()
+    std = np.sqrt(((voteCoords - CoM) ** 2.0).sum(1)).std()
     return CoM, std

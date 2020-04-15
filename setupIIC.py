@@ -12,11 +12,11 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ===============================================================================
 """
 
+from Cython.Distutils import build_ext
 from distutils.core import setup
 from distutils.extension import Extension
-from Cython.Distutils import build_ext
 
 setup(
-    cmdclass = {'build_ext': build_ext},
-    ext_modules = [Extension("integralimagec", ["integralimagec.pyx"])]
+    cmdclass={'build_ext': build_ext},
+    ext_modules=[Extension("integralimagec", ["integralimagec.pyx"])]
 )

@@ -14,13 +14,21 @@ instance is created for each 3D volume.
 
 """
 from __future__ import print_function
+
+import gc
+import os
+
+import pydicom
+import time
+from pydicom import compat
+from pydicom.sequence import Sequence
+
 #
 # Copyright (c) 2010 Almar Klein
 # This file is released under the pydicom license.
 #    See the file LICENSE included with the pydicom distribution, also
 #    available at https://github.com/pydicom/pydicom
 #
-
 # I (Almar) performed some test to loading a series of data
 # in two different ways: loading all data, and deferring loading
 # the data. Both ways seem equally fast on my system. I have to
@@ -37,18 +45,10 @@ from __future__ import print_function
 # - Deferred loading of data, cold: 9 sec
 # - Deferred loading of data, warm: 3 sec
 
-import sys
-import os
-import time
-import gc
-
-import pydicom
-from pydicom.sequence import Sequence
-from pydicom import compat
-
 # Try importing numpy
 try:
     import numpy as np
+
     have_numpy = True
 except ImportError:
     np = None  # NOQA
@@ -278,21 +278,21 @@ def _getPixelDataFromDataset(ds):
             if minReq < 0:
                 # Signed integer type
                 maxReq = max([-minReq, maxReq])
-                if maxReq < 2**7:
+                if maxReq < 2 ** 7:
                     dtype = np.int8
-                elif maxReq < 2**15:
+                elif maxReq < 2 ** 15:
                     dtype = np.int16
-                elif maxReq < 2**31:
+                elif maxReq < 2 ** 31:
                     dtype = np.int32
                 else:
                     dtype = np.float32
             else:
                 # Unsigned integer type
-                if maxReq < 2**8:
+                if maxReq < 2 ** 8:
                     dtype = np.uint8
-                elif maxReq < 2**16:
+                elif maxReq < 2 ** 16:
                     dtype = np.uint16
-                elif maxReq < 2**32:
+                elif maxReq < 2 ** 32:
                     dtype = np.uint32
                 else:
                     dtype = np.float32
@@ -302,7 +302,7 @@ def _getPixelDataFromDataset(ds):
                 data = data.astype(dtype)
 
         # Apply slope and offset
-        _data = data*slope
+        _data = data * slope
         _data += offset
     else:
         _data = data

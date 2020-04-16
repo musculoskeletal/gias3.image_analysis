@@ -16,6 +16,7 @@ instance is created for each 3D volume.
 from __future__ import print_function
 
 import gc
+import logging
 import os
 
 import pydicom
@@ -53,6 +54,8 @@ try:
 except ImportError:
     np = None  # NOQA
     have_numpy = False
+
+log = logging.getLogger(__name__)
 
 
 # Helper functions and classes
@@ -194,7 +197,7 @@ def _splitSerieIfRequired(serie, series):
         else:
             # Test missing file
             if distance and _check_slice_distance(newDist, distance, 1.5):
-                print('Warning: missing file after "%s"' % ds1.filename)
+                log.debug('Warning: missing file after "%s"' % ds1.filename)
             distance = newDist
 
         # Add to last list
@@ -357,7 +360,7 @@ def read_files(path, showProgress=False, readPixelData=False, force=False):
             elif os.path.isfile(p):
                 files.append(p)
             else:
-                print("Warning, the path '%s' is not valid." % p)
+                log.debug("Warning, the path '%s' is not valid." % p)
     else:
         raise ValueError('The path argument must be a string or list.')
 
@@ -391,7 +394,7 @@ def read_files(path, showProgress=False, readPixelData=False, force=False):
             if showProgress is _progressCallback:
                 _progressBar.PrintMessage(str(why))
             else:
-                print('Warning:', why)
+                log.debug('Warning:', why)
             continue
 
         # Get SUID and register the file with an existing or new series object
@@ -654,7 +657,7 @@ class DicomSeries(object):
                 if self._showProgress is _progressCallback:
                     _progressBar.PrintMessage(msg)
                 else:
-                    print(msg)
+                    log.debug(msg)
             # Store previous
             ds1 = ds2
 
@@ -683,11 +686,11 @@ if __name__ == '__main__':
     import sys
 
     if len(sys.argv) != 2:
-        print("Expected a single argument: a directory with dicom files in it")
+        log.debug("Expected a single argument: a directory with dicom files in it")
     else:
         adir = sys.argv[1]
         t0 = time.time()
         all_series = read_files(adir, None, False)
-        print("Summary of each series:")
+        log.debug("Summary of each series:")
         for series in all_series:
-            print(series.description)
+            log.debug(series.description)

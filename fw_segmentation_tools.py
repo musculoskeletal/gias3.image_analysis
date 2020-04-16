@@ -17,6 +17,7 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 """
 
 import copy
+import logging
 
 import numpy as np
 import time
@@ -31,8 +32,8 @@ from gias2.image_analysis import image_tools
 from gias2.learning import PCA_fitting
 from gias2.registration import alignment_fitting
 
+log = logging.getLogger(__name__)
 
-# import pdb
 
 def makeImageSpaceGF(scan, GF, negSpacing=False, zShift=True):
     """
@@ -257,7 +258,7 @@ def makeMeshFit(mode, **kwargs):
 
     """
 
-    print('creating fitting mode: ' + mode)
+    log.debug('creating fitting mode: ' + mode)
     if mode == 'PCEPEP':
         return _makeMeshFitPCFit(GFF.makeObjEPEP, kwargs['GF'], kwargs['GD'],
                                  kwargs['SSM'], kwargs['SSMModes'],
@@ -362,7 +363,7 @@ def _makeMeshFitPointPCFit(SSM, fitModes, mahalanobisWeight=0.0, initRotation=No
             landmarkEvaluator=landmarkEvaluator, landmarkWeights=landmarkWeights, \
             verbose=True)
 
-        print(pcWeights)
+        log.debug(pcWeights)
 
         # errors
         if landmarkIndices != None:
@@ -578,7 +579,7 @@ def runGFCLM(clm, scan, GF, GFFitMode, GFGetParams, shapeModel, shapeModelModes,
 
         # x0 = np.hstack([ mean2GFRigidT, GFPCSD ])
         if verbose:
-            print('x0:', x0)
+            log.debug('x0:', x0)
 
     # crop/subsample image around initial model for segmentation
     initPoints = GF.get_all_point_positions()  ###
@@ -726,9 +727,9 @@ def initialiseGFASM(ASMParams, GF, GFEvalMode, GFFitMode, GD, shapeModel, shapeM
         getMeshNormals=GFNormalEval,
         fitMesh=GFFitter
     )
-    print('Loading profile texture models...')
+    log.debug('Loading profile texture models...')
     asm.loadProfilePC()
-    print('Loading profile texture models...done.')
+    log.debug('Loading profile texture models...done.')
     asm.setElementXIndices(epI)
 
     return asm, GFCoordEval, GFGetParams, GFFitter
@@ -773,7 +774,7 @@ def runGFASM(asm, scan, GF, GFFitMode, GFGetParams, shapeModel, shapeModelModes,
             mWeight=0.5
         )[0]
         if verbose:
-            print('x0:', x0)
+            log.debug('x0:', x0)
 
     ASMOutput = asm.segment(x0, verbose=verbose, debug=0)
     outputVars = ['segXOpt', 'segData', 'segDataWeight', 'segDataLandmarkMask',

@@ -11,7 +11,7 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ===============================================================================
 """
-
+import logging
 import os
 import re
 
@@ -33,11 +33,13 @@ from gias2.image_analysis import dicom_series
 from gias2.learning.PCA import PCA
 from gias2.registration import alignment_analytic
 
+log = logging.getLogger(__name__)
+
 try:
     from matplotlib import pyplot as plot
     from matplotlib import cm
 except ImportError:
-    print('Matplotlib not found, 2-D visualisation will be disabled')
+    log.debug('Matplotlib not found, 2-D visualisation will be disabled')
 
 
 # from gias.common import vtkRender
@@ -148,7 +150,7 @@ def load_series(folder, filepat=None, suid=None, readall=False):
         files = [os.path.join(folder, f) for f in directoryList]
 
     # load series
-    print(('Reading {} slices.'.format(len(files))))
+    log.debug(('Reading {} slices.'.format(len(files))))
     series = dicom_series.read_files(
         files, showProgress=True, readPixelData=False
     )
@@ -156,13 +158,13 @@ def load_series(folder, filepat=None, suid=None, readall=False):
     if not readall:
         if suid is None:
             ret_series = _get_larget_series(series)
-            print('Loading largest series {}'.format(ret_series.suid))
+            log.debug('Loading largest series {}'.format(ret_series.suid))
         else:
             found_series = False
             for s in series:
                 if s.suid == suid:
                     ret_series = s
-                    print('Loading series {}'.format(ret_series.suid))
+                    log.debug('Loading series {}'.format(ret_series.suid))
                     found_series = True
 
             if not found_series:
@@ -304,7 +306,7 @@ class Scan:
         try:
             self.sliceLocations = [float(s.SliceLocation) for s in serie._datasets]
         except AttributeError:
-            print('No slice location in serie, falling back to ImagePositionPatient')
+            log.debug('No slice location in serie, falling back to ImagePositionPatient')
             self.sliceLocations = [float(s.ImagePositionPatient[2]) for s in serie._datasets]
 
         # load the image array
@@ -354,7 +356,7 @@ class Scan:
             raise IOError('No files found')
 
         if nSlice != None:
-            print('loading %i slices' % (nSlice))
+            log.debug('loading %i slices' % (nSlice))
             files = [files[i] for i in range(nSlice)]
 
         # Open a file to get image size
@@ -410,7 +412,7 @@ class Scan:
 
         """
 
-        print('loading folder ' + folder)
+        log.debug('loading folder ' + folder)
         self.read_folder = folder
         files = self.list_files(self.read_folder, filePattern, nSlice)
 
@@ -422,7 +424,7 @@ class Scan:
         self.slice0 = slice0
 
         # load stack
-        print(('Loading {} slices.'.format(len(files))))
+        log.debug(('Loading {} slices.'.format(len(files))))
         try:
             stacks = dicom_series.read_files(
                 files, showProgress=True, readPixelData=True, force=True
@@ -443,7 +445,7 @@ class Scan:
         try:
             self.sliceLocations = [float(s.SliceLocation) for s in self.stack._datasets]
         except AttributeError:
-            print('WARNING: no slice location in stack, falling back to ImagePositionPatient')
+            log.debug('WARNING: no slice location in stack, falling back to ImagePositionPatient')
             self.sliceLocations = [float(s.ImagePositionPatient[2]) for s in self.stack._datasets]
 
         # ======================================================#
@@ -462,8 +464,8 @@ class Scan:
             self.stack, default_patient_position=self.DEFAULT_PATIENT_POSITION
         )
 
-        print('scan voxelSpacing: {}'.format(self.voxelSpacing))
-        print('scan ic2 matrix: {}'.format(self.index2CoordA))
+        log.debug('scan voxelSpacing: {}'.format(self.voxelSpacing))
+        log.debug('scan ic2 matrix: {}'.format(self.index2CoordA))
 
     @staticmethod
     def list_files(read_folder, filePattern, nSlice):
@@ -479,7 +481,7 @@ class Scan:
         if len(files) == 0:
             raise IOError('No files found')
         if nSlice is not None:
-            print('loading {} slices'.format(nSlice))
+            log.debug('loading {} slices'.format(nSlice))
             files = files[:nSlice]
         return files
 
@@ -507,7 +509,7 @@ class Scan:
 
         if dPixel[0] > self.pixelTolerance or dPixel[1] > self.pixelTolerance \
                 or dSlice > self.sliceTolerance:
-            print('Warning: Inconsistent pixel or slice spacing ', dPixel, ' ', dSlice)
+            log.debug('Warning: Inconsistent pixel or slice spacing ', dPixel, ' ', dSlice)
 
         self._previousSliceLocation = sliceSliceLocation
 
@@ -565,10 +567,10 @@ class Scan:
 
         if sorted_args[0] == len(slice_locations) - 1:
             flipped = True
-            print('Scan was flipped in Z during reordering')
+            log.debug('Scan was flipped in Z during reordering')
         else:
             flipped = False
-            print('Scan was not flipped in Z during reordering')
+            log.debug('Scan was not flipped in Z during reordering')
 
         if flipped:
             self.flip_affine_z()
@@ -782,7 +784,7 @@ class Scan:
         """
 
         if number > self.I.shape[axis]:
-            print('ERROR: Scan.createSubSlice: invalid slice number (', str(number), ') in axis', str(axis))
+            log.debug('ERROR: Scan.createSubSlice: invalid slice number (', str(number), ') in axis', str(axis))
             return
         elif axis == 0:
             return Slice(self.I[number, :, :], number, axis)
@@ -791,7 +793,7 @@ class Scan:
         elif axis == 2:
             return Slice(self.I[:, :, number], number, axis)
         else:
-            print('ERROR: Scan.createSubSlice: invalid axis', str(axis))
+            log.debug('ERROR: Scan.createSubSlice: invalid axis', str(axis))
             return
 
     def createSubSliceFromPlane(self, plane, slice_shape, res, maptoindices=True, order=1):
@@ -906,7 +908,7 @@ class Scan:
         self.CoM = [0.0, 0.0, 0.0]
 
         if self.M00 == 0.0:
-            print('WARNING Section ' + self.name + ': zero-mass object')
+            log.debug('WARNING Section ' + self.name + ': zero-mass object')
             self.isZeroMass = True
             return
         else:
@@ -932,7 +934,7 @@ class Scan:
         Principal axes are in the columns of self.pAxes
         """
         if self.isZeroMass:
-            print('ERROR: Scan.calculatePrincipalAxes: zero-mass object')
+            log.debug('ERROR: Scan.calculatePrincipalAxes: zero-mass object')
             return
 
         self.momentMatrix = numpy.zeros((3, 3))
@@ -957,7 +959,7 @@ class Scan:
         """
 
         if self.isZeroMass:
-            print('ERROR: Scan._calcCentralMoment: zero-mass object')
+            log.debug('ERROR: Scan._calcCentralMoment: zero-mass object')
             return
 
         Itemp = self.I.astype(float)
@@ -1004,7 +1006,7 @@ class Scan:
         if not self.isZeroMass:
             # calculate angle between pMax and the projection of pMax on the x-y plane
             pMax = self.pAxes[:, self.pAxesMag.argmax()]
-            print(pMax)
+            log.debug(pMax)
             pMaxYZ = numpy.array([0.0, pMax[1], pMax[2]])
             theta = numpy.arccos(numpy.inner(pMaxYZ, [0.0, 0.0, 1.0]) / mag(pMaxYZ))
             theta = -180.0 * theta / numpy.pi
@@ -1015,7 +1017,7 @@ class Scan:
 
             # caculate angle between new pMax and (1,0,0)
             pMax = self.pAxes[:, self.pAxesMag.argmax()]
-            print(pMax)
+            log.debug(pMax)
             phi = numpy.arccos(numpy.inner(pMax, [1.0, 0.0, 0.0]) / mag(pMax))
             phi = -180.0 * phi / numpy.pi
             if phi > 90.0:
@@ -1025,7 +1027,7 @@ class Scan:
 
             # calculate angle between new 2nd largest pAxes and (0,1,0)
             p2 = self.pAxes[:, self.pAxesMag.argsort()[-2]]
-            print(p2)
+            log.debug(p2)
             p2XZ = numpy.array([0.0, p2[1], p2[2]])
             ro = numpy.arccos(numpy.inner(p2XZ, [0.0, 1.0, 0.0]) / mag(p2XZ))
             ro = -180.0 * ro / numpy.pi
@@ -1036,7 +1038,7 @@ class Scan:
 
             return (theta, phi, ro)
         else:
-            print('ERROR: Scan.alignPAxes: zero mass image')
+            log.debug('ERROR: Scan.alignPAxes: zero mass image')
             return None
 
     # ==================================================================#
@@ -1056,7 +1058,7 @@ class Scan:
         Scale can either be scalar (isotropic) or a list (orthotropic)
         """
         self.I = zoom(self.I, scale, order=order)
-        print('New image shape: {}'.format(self.I.shape))
+        log.debug('New image shape: {}'.format(self.I.shape))
 
         self.voxelSpacing = numpy.array(self.voxelSpacing) / scale
         if self.USE_DICOM_AFFINE:
@@ -1093,7 +1095,7 @@ class Scan:
             return newScan
         else:
             self.I = downscale_local_mean(self.I, factors, cval, clip)
-            print('New image shape: {}'.format(self.I.shape))
+            log.debug('New image shape: {}'.format(self.I.shape))
             self._updateI()
             if self.USE_DICOM_AFFINE:
                 tmat = numpy.eye(3)
@@ -1132,14 +1134,14 @@ class Scan:
 
         outputShape = self.getAffineOutputShape(matrix)
 
-        print('outputShape:', outputShape)
+        log.debug('outputShape:', outputShape)
         # ~ self.I = affine_transform( self.I, matrix, order=order )
         if matrix.shape == (4, 4):
             offset = matrix[:3, 3]
             matrix = matrix[:3, :3]
 
         self.I = affine_transform(self.I, matrix, output_shape=outputShape, offset=offset, order=order)
-        print('New image shape:', self.I.shape)
+        log.debug('New image shape:', self.I.shape)
         self._updateI()
         return
 
@@ -1185,7 +1187,7 @@ class Scan:
         dim = len(self.I.shape)
 
         if dim > 3:
-            print("pad ERROR: invalid dimension")
+            log.debug("pad ERROR: invalid dimension")
             return None
 
         newsize = numpy.zeros(dim)
@@ -1229,8 +1231,8 @@ class Scan:
         if pad:
             cropArray += padv
 
-        print("precrop shape = ", self.I.shape)
-        print("crop shape = ", cropArray.shape)
+        log.debug("precrop shape = ", self.I.shape)
+        log.debug("crop shape = ", cropArray.shape)
 
         if pad == 0:
             cropArray = self.I[
@@ -1366,9 +1368,9 @@ class Scan:
         self.phantomValues = self.phantom.samplePhantoms(useSamples)
 
         if useSamples == 'mean':
-            print('average phantom values: ' + ' '.join(['%4.1f' % v for v in self.phantomValues]))
+            log.debug('average phantom values: ' + ' '.join(['%4.1f' % v for v in self.phantomValues]))
         elif useSamples == 'all':
-            print('average phantom values: ' + ' '.join(['%4.1f' % v.mean() for v in self.phantomValues]))
+            log.debug('average phantom values: ' + ' '.join(['%4.1f' % v.mean() for v in self.phantomValues]))
 
     def calibrateQCT(self, useSamples='all'):
 
@@ -1421,16 +1423,16 @@ class qCTLookup(object):
             K2HPO4 = self.K2HPO4Density
 
         # ~ pdb.set_trace()
-        print('calibrating qCT')
+        log.debug('calibrating qCT')
         sigma, beta, r, p, stderr = linregress(K2HPO4, self.phantomValuesMinusWater.flatten())
-        print('r-value:', r)
-        print('p-value:', p)
+        log.debug('r-value:', r)
+        log.debug('p-value:', p)
         self.sigma = sigma + self.sigmaOffset
         self.beta = beta + self.betaOffset
         self.r = r
         self.stderr = stderr
-        print('sigma:', self.sigma)
-        print('beta:', self.beta)
+        log.debug('sigma:', self.sigma)
+        log.debug('beta:', self.beta)
 
         return self.sigma, self.beta
 
@@ -1482,7 +1484,7 @@ class phantomSampler(object):
         self.rodSamples = []  # shape: [slice, rods, x, y]
         self.bestProfiles = []
         self.bestErr = []
-        print('locating and sampling phantom')
+        log.debug('locating and sampling phantom')
         for s in self.sampleSlices:
             tempProfile = self.phantomImage[:, self.phantomMidY, s]
             errors, phantomOrigin, [x1, x2], [X1, X2], bestProfileSlice, bestErrSlice = self._findPhantomInSlice(
@@ -1490,7 +1492,7 @@ class phantomSampler(object):
             rodSamplesSlice = self._samplePhantomSlice(self.sampleHalfW, phantomOrigin, s)
 
             # ~ pdb.set_trace()
-            print('slice', s, 'SSD', bestErrSlice, 'mean values:',
+            log.debug('slice', s, 'SSD', bestErrSlice, 'mean values:',
                   ' '.join(['%4.1f' % v for v in rodSamplesSlice.mean(1).mean(1)]))
 
             if bestErrSlice < self.SSDMax:
@@ -1498,7 +1500,7 @@ class phantomSampler(object):
                 self.bestProfiles.append(bestProfileSlice)
                 self.bestErr.append(bestErrSlice)
             else:
-                print('dropped')
+                log.debug('dropped')
 
         self.rodValues = self._calcRodValues(useSamples)
         return self.rodValues
@@ -1619,7 +1621,7 @@ class Slice:
         self.CoM = [0.0, 0.0]
 
         if self.M00 == 0.0:
-            print('WARNING slice ' + str(self.number) + ': zero-mass image')
+            log.debug('WARNING slice ' + str(self.number) + ': zero-mass image')
             self.isZeroMass = True
             return
         else:
@@ -1642,7 +1644,7 @@ class Slice:
         """ calculate self.I's principal axes and magnitudes
         """
         if self.isZeroMass:
-            print('WARNING: Scan.calculatePrincipalAxes: zero-mass object')
+            log.debug('WARNING: Scan.calculatePrincipalAxes: zero-mass object')
             return
 
         self.momentMatrix = numpy.zeros((2, 2))
@@ -1664,7 +1666,7 @@ class Slice:
         """
 
         if self.isZeroMass:
-            print('ERROR: Scan._calcCentralMoment: zero-mass object')
+            log.debug('ERROR: Scan._calcCentralMoment: zero-mass object')
             return
 
         Itemp = self.I.astype(float)
@@ -1772,7 +1774,7 @@ class Slice:
         elif coords == 'slice':
             return cartPoints
         else:
-            print('ERROR: slice.samplePointRadialSpline: unrecognised coords option')
+            log.debug('ERROR: slice.samplePointRadialSpline: unrecognised coords option')
             return
 
     # ==================================================================#
@@ -1803,7 +1805,7 @@ class Slice:
         elif coords == 'slice':
             return cartPoints
         else:
-            print('ERROR: slice.samplePointRadialSpline: unrecognised coords option')
+            log.debug('ERROR: slice.samplePointRadialSpline: unrecognised coords option')
             return
 
     # ==================================================================#
@@ -1935,11 +1937,11 @@ def pad(array, t, padval=0):
     """ pad self.I by pad voxels of value padv
     """
 
-    print("Padding...")
+    log.debug("Padding...")
     dim = len(array.shape)
 
     if dim > 3:
-        print("pad ERROR: invalid dimension")
+        log.debug("pad ERROR: invalid dimension")
         return None
 
     newsize = numpy.zeros(dim)
@@ -1961,20 +1963,20 @@ def pad(array, t, padval=0):
 
 # ======================================================================#
 def nz_stats(array, return_val=0):
-    print("Non-zero element stats:")
+    log.debug("Non-zero element stats:")
     nz = numpy.nonzero(array)
     values = numpy.zeros([nz[0].shape[0]], dtype=int)
     for i in range(0, nz[0].shape[0]):
         values[i] = array[nz[0][i], nz[1][i], nz[2][i]]
 
     if values.__len__() == 0:
-        print("No nonzero elements in array")
+        log.debug("No nonzero elements in array")
     else:
-        print("array n = ", values.__len__())
-        print("array max = ", values.max())
-        print("array min = ", values.min())
-        print("array mean = ", values.mean())
-        print("array std = ", values.std())
+        log.debug("array n = ", values.__len__())
+        log.debug("array max = ", values.max())
+        log.debug("array min = ", values.min())
+        log.debug("array mean = ", values.mean())
+        log.debug("array std = ", values.std())
 
     if return_val:
         return values
@@ -1995,7 +1997,7 @@ def evalPlaneZ(P, N, x, y):
     N = numpy.array(N, dtype=float)
     N = norm(N)
     if abs(N[2]) < tol:
-        print('WARNING: evalPlaneZ: zero normal z component')
+        log.debug('WARNING: evalPlaneZ: zero normal z component')
         return None
     else:
         x = float(x)
@@ -2106,13 +2108,13 @@ class quadraticCurve(object):
         """ optimise curve parameters to minimise projected error to 
         data = [[xyz],[xyz],...]
         """
-        print('\nfitting...\n')
-        print('data shape:', data.shape)
+        log.debug('\nfitting...\n')
+        log.debug('data shape:', data.shape)
         self.fitData = data
         x0 = numpy.array(self.params).ravel()
         xOpt = leastsq(self._fitLsqObj, x0, xtol=self.fitTol, ftol=self.fitTol)[0]
 
-        print('\nXopt:', xOpt)
+        log.debug('\nXopt:', xOpt)
         finalErr = self._fitLsqObj(xOpt)
         finalRMS = numpy.sqrt(finalErr.mean())
 
@@ -2135,7 +2137,7 @@ class quadraticCurve(object):
 
         err = numpy.array(err)
         rms = numpy.sqrt((err ** 2.0).mean())
-        print('rms error:', rms)
+        log.debug('rms error:', rms)
         # ~ return rms
 
         return err
@@ -2167,8 +2169,8 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     minx = max(0, minx)
     miny = max(0, miny)
     minz = max(0, minz)
-    print('cropping max:', maxx, maxy, maxz)
-    print('cropping min:', minx, miny, minz)
+    log.debug('cropping max:', maxx, maxy, maxz)
+    log.debug('cropping min:', minx, miny, minz)
     cropOffset = numpy.array([minx, miny, minz])
     if not negSpacing:
         if zShift:

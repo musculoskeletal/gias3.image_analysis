@@ -12,7 +12,7 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ===============================================================================
 """
-
+import logging
 import pickle
 
 import numpy as np
@@ -20,7 +20,8 @@ import numpy as np
 from gias2.image_analysis import haarregressionvoting as HRV
 
 
-# import pdb
+log = logging.getLogger(__name__)
+
 
 class CLMSegmentationParams(object):
     """
@@ -262,8 +263,8 @@ class CLMSegmentation(object):
         for i in range(len(regressResults)):
             dataPoints[i], weights[i] = voteProcessor(regressResults[i], samplePoints[i])
 
-        print('dataPoints shape', dataPoints.shape)
-        print('weights shape', weights.shape)
+        log.debug('dataPoints shape', dataPoints.shape)
+        log.debug('weights shape', weights.shape)
         if self.params.votingMode == 'comstd':
             # convert stds into useful fitting weights (higher SD, lower weight, normalise to 0-1)
             weights = 1.0 / (weights / weights.max())
@@ -368,7 +369,7 @@ class CLMSegmentation(object):
         outputHistory: A dictionary of variables recorded at each iteration.
         """
 
-        print('\nstarting segmentation')
+        log.debug('\nstarting segmentation')
         it = 0
         meshRMSOld = -1.0
         meshSDOld = -1.0
@@ -393,9 +394,9 @@ class CLMSegmentation(object):
             landmarks = self.getMeshCoords(meshParams)
 
             if debug:
-                print('landmark bounds:')
-                print(landmarks.min(0))
-                print(landmarks.max(0))
+                log.debug('landmark bounds:')
+                log.debug(landmarks.min(0))
+                log.debug(landmarks.max(0))
 
             # filter out out-of-bounds landmarks and landmarks in masked image regions in using a masked image
             if self.filterLandmarks:
@@ -415,10 +416,10 @@ class CLMSegmentation(object):
                 regressResults, samplePoints = self._sampleAndRegress(validLandmarks)
 
             if debug:
-                print('n regressResults', len(regressResults))
-                print('n samplePoints', len(samplePoints))
-                print('n goodLandmarks', len(goodLandmarks))
-                print('n goodLandmarkIndices', len(goodLandmarkIndices))
+                log.debug('n regressResults', len(regressResults))
+                log.debug('n samplePoints', len(samplePoints))
+                log.debug('n goodLandmarks', len(goodLandmarks))
+                log.debug('n goodLandmarkIndices', len(goodLandmarkIndices))
 
             # post-process regression results (votes or datapoints) for fitting
             if self.filterLandmarks:
@@ -427,19 +428,19 @@ class CLMSegmentation(object):
                 data, W = self._processVotes(regressResults, samplePoints, landmarks)
 
             if debug:
-                print('data bounds:')
-                print(data.min(0))
-                print(data.max(0))
+                log.debug('data bounds:')
+                log.debug(data.min(0))
+                log.debug(data.max(0))
 
             # fit shape model
             newMeshParams, meshRMS, meshSD = self.fitMesh(data, meshParams.copy(), W, goodLandmarkIndices)
             # mahaDist = np.sqrt((newMeshParams[6:]**2.0).sum())    # assuming mesh params are tx,ty,tz,rx,ry,rz,pc1,pc2,...
 
             if debug:
-                print('newMeshParams shape', newMeshParams.shape)
-                print('fitted bounds:')
-                print(newMeshParams.min(0))
-                print(newMeshParams.max(0))
+                log.debug('newMeshParams shape', newMeshParams.shape)
+                log.debug('fitted bounds:')
+                log.debug(newMeshParams.min(0))
+                log.debug(newMeshParams.max(0))
 
             # check against stopping criteria
             stopSeg, passFrac = self._stopCritCoMStd(goodLandmarks, data)
@@ -455,7 +456,7 @@ class CLMSegmentation(object):
             dataHistory['goodLandmarkIndices'].append(goodLandmarkIndices)
 
             if verbose:
-                print('\nit: %(it)03i  passFrac: %(pFrac)5.3f  MeshRMS: %(meshRMS)5.3f  MeshSD: %(meshSD)5.3f\n' \
+                log.debug('\nit: %(it)03i  passFrac: %(pFrac)5.3f  MeshRMS: %(meshRMS)5.3f  MeshSD: %(meshSD)5.3f\n' \
                       % {'it': it, 'pFrac': passFrac, 'meshRMS': meshRMS, 'meshSD': meshSD})
                 # print 'mesh params: '+' '.join( ['%(0)2.3f'%{'0':i} for i in newMeshParams] )
 
@@ -478,7 +479,7 @@ class CLMSegmentation(object):
             # use highest cFrac params
             bestIt = np.argmax(outputHistory['passFrac'])
             if verbose:
-                print('using results from iteration', bestIt + 1)
+                log.debug('using results from iteration', bestIt + 1)
             self.meshParamsFinal = outputHistory['meshParams'][bestIt]
             rmsFinal = outputHistory['meshRMS'][bestIt]
             sdFinal = outputHistory['meshSD'][bestIt]
@@ -487,7 +488,7 @@ class CLMSegmentation(object):
             W = dataHistory['W'][bestIt]
             goodLandmarkIndices = dataHistory['goodLandmarkIndices'][bestIt]
         if verbose:
-            print('DONE')
+            log.debug('DONE')
 
         return self.meshParamsFinal, data, W, goodLandmarkIndices, rmsFinal, sdFinal, passFrac, outputHistory
 

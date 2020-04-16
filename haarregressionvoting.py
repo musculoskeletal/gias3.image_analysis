@@ -11,7 +11,7 @@ License, v. 2.0. If a copy of the MPL was not distributed with this
 file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ===============================================================================
 """
-
+import logging
 import pickle
 import warnings
 
@@ -22,6 +22,8 @@ from sklearn.ensemble import ExtraTreesRegressor
 from gias2.image_analysis import haar
 from gias2.image_analysis import image_tools
 from gias2.image_analysis import integralimage
+
+log = logging.getLogger(__name__)
 
 
 class SamplingWarning(Exception):
@@ -181,7 +183,7 @@ class HaarImage(image_tools.Scan):
             except IndexError:
                 retry = 1
                 while retry:
-                    print('retry', retry)
+                    log.debug('retry', retry)
                     dRetry = np.random.uniform(low=-dMax, high=dMax, size=(3))
                     sIndRetry = self.coord2Index(p + dRetry, zShift, negSpacing)
 
@@ -192,7 +194,7 @@ class HaarImage(image_tools.Scan):
                     else:
                         displacements[i] = dRetry
                         retry = 0
-                        print(sIndRetry)
+                        log.debug(sIndRetry)
 
         if len(features) == 0:
             warnings.warn("No suitable sampling locations, p = " + str(p))
@@ -484,10 +486,10 @@ class TrainCLMRFs(object):
         """
 
         for i, (scan, P) in enumerate(self.trainingSamples):
-            print('calculating integral image')
+            log.debug('calculating integral image')
             trainingImage = HaarImage(scan.I, scan.voxelSpacing, scan.voxelOrigin)
 
-            print('sampling features')
+            log.debug('sampling features')
             try:
                 pointDisplacements, \
                 pointFeatures = trainingImage.extractHaarAboutPointRandomMulti(
@@ -496,7 +498,7 @@ class TrainCLMRFs(object):
                     haarMode=self.haarMode,
                     windowSizeVar=self.windowSizeVar)
             except SamplingError:
-                print('WARNING: skipped due to out of bounds sampling')
+                log.debug('WARNING: skipped due to out of bounds sampling')
             else:
                 self.pointDisplacements.append(pointDisplacements)
                 self.pointFeatures.append(pointFeatures)
@@ -504,8 +506,8 @@ class TrainCLMRFs(object):
         self.pointDisplacements = np.hstack(self.pointDisplacements)
         self.pointFeatures = np.hstack(self.pointFeatures)
 
-        print('displacements shape:', self.pointDisplacements.shape)
-        print('features shape:', self.pointFeatures.shape)
+        log.debug('displacements shape:', self.pointDisplacements.shape)
+        log.debug('features shape:', self.pointFeatures.shape)
 
     def trainRFs(self, **kwargs):
         """
@@ -516,7 +518,7 @@ class TrainCLMRFs(object):
         **kwargs: keyword arguments for sklearn.ensemble.ExtraTreesRegressor 
         """
 
-        print('training RFs')
+        log.debug('training RFs')
         self.RFs = []
         for i in range(self.nPoints):
             sys.stdout.flush()

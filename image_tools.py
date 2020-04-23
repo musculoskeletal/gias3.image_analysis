@@ -2169,8 +2169,8 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     minx = max(0, minx)
     miny = max(0, miny)
     minz = max(0, minz)
-    log.debug('cropping max:', maxx, maxy, maxz)
-    log.debug('cropping min:', minx, miny, minz)
+    log.debug('cropping max: %s, %s, %s', maxx, maxy, maxz)
+    log.debug('cropping min: %s, %s, %s', minx, miny, minz)
     cropOffset = numpy.array([minx, miny, minz])
     if not negSpacing:
         if zShift:

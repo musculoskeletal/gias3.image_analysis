@@ -14,7 +14,9 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
 import re
+from typing import Union, Tuple, List
 
+import numpy as np
 import numpy.ma as ma
 import pydicom
 import numpy
@@ -32,6 +34,7 @@ from gias2.common import geoprimitives
 from gias2.image_analysis import dicom_series
 from gias2.learning.PCA import PCA
 from gias2.registration import alignment_analytic
+from gias2.registration.alignment_analytic import calcAffine
 
 log = logging.getLogger(__name__)
 
@@ -2218,3 +2221,30 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     #                         voxelOffset=scan.voxelOffset-offset)
 
     return croppedScan, cropOffset
+
+
+def scaleAlignScan(scan: Scan, s: Union[list, tuple, np.ndarray]) -> Tuple[Scan, List[np.ndarray]]:
+    """ affine transform scan to line up its principal axes with global
+    x ,y, z at the centre of mass, and scales by 3-tuple s
+
+    returns pointer to scan object, and [CoM, pAxes] after scaling,
+    before alignment.
+    """
+
+    scale_matrix = np.array([[1 / s[0], 0.0, 0.0],
+                             [0.0, 1 / s[1], 0.0],
+                             [0.0, 0.0, 1 / s[2]]])
+
+    scan.affine(scale_matrix, order=3)
+    old_com = list(scan.CoM)
+    old_p_axes = np.array(scan.pAxes)
+    # ~ scan.crop( 10 )
+
+    target_landmarks = np.ndarray([old_com, np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])])
+    data_landmarks = np.ndarray([old_com, old_p_axes])
+    align_matrix = calcAffine(target_landmarks, data_landmarks)  # affine is the otherway round
+
+    scan.affine(align_matrix[:3, :3], offset=align_matrix[:3, -1], order=3)
+    scan.crop(10)
+
+    return scan, [old_com, old_p_axes]

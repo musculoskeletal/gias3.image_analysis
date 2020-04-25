@@ -2204,12 +2204,11 @@ def scaleAlignScan(scan: Scan, s: Union[list, tuple, np.ndarray]) -> Tuple[Scan,
                              [0.0, 0.0, 1 / s[2]]])
 
     scan.affine(scale_matrix, order=3)
-    old_com = list(scan.CoM)
+    old_com = np.ndarray(scan.CoM)
     old_p_axes = np.array(scan.pAxes)
-    # ~ scan.crop( 10 )
 
-    target_landmarks = np.ndarray([old_com, np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]])])
-    data_landmarks = np.ndarray([old_com, old_p_axes])
+    target_landmarks = (old_com, np.array([[0.0, 0.0, 1.0], [0.0, 1.0, 0.0], [1.0, 0.0, 0.0]]))
+    data_landmarks = (old_com, old_p_axes)
     align_matrix = calcAffine(target_landmarks, data_landmarks)  # affine is the otherway round
 
     scan.affine(align_matrix[:3, :3], offset=align_matrix[:3, -1], order=3)

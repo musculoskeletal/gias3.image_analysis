@@ -14,13 +14,14 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import os
 import re
-from typing import Union, Tuple, List
+from typing import Union, Tuple, List, Optional, Type
 
+import numpy
 import numpy as np
 import numpy.ma as ma
 import pydicom
-import numpy
 import sys
+from pydicom import FileDataset
 from scipy.interpolate import LSQUnivariateSpline
 from scipy.linalg import eigh, inv
 from scipy.ndimage import rotate, affine_transform, zoom, map_coordinates, gaussian_filter1d, gaussian_filter, \
@@ -30,8 +31,9 @@ from scipy.spatial.distance import euclidean
 from scipy.stats import linregress
 from skimage.transform import downscale_local_mean
 
-from gias2.common import geoprimitives
+from gias2.common.geoprimitives import Plane
 from gias2.image_analysis import dicom_series
+from gias2.image_analysis.dicom_series import DicomSeries
 from gias2.learning.PCA import PCA
 from gias2.registration import alignment_analytic
 from gias2.registration.alignment_analytic import calcAffine
@@ -62,46 +64,46 @@ class PhantomError(Exception):
 
 class ProgressOutput:
 
-    def __init__(self, task, total):
+    def __init__(self, task: str, total: Union[float, int]):
         self.task = task
         self.total = total
         self.value = 0
 
-    def progress(self, value, comment=''):
+    def progress(self, value: Union[float, int], comment: str = ''):
         self.value = value
         percent = 100. * value / self.total
-        outcomment = ''
+        out_comment = ''
         if len(comment) > 0:
-            outcomment = ": %s" % comment
-        sys.stdout.write("Progress: %s : %2d%% %s  \r" % (self.task, percent, outcomment))
+            out_comment = ": %s" % comment
+        sys.stdout.write("Progress: %s : %2d%% %s r" % (self.task, percent, out_comment))
         sys.stdout.flush()
 
-    def output(self, comment=''):
-        outcomment = ''
+    def output(self, comment: str = ''):
+        out_comment = ''
         if len(comment) > 0:
-            outcomment = ": %s" % comment
-        sys.stdout.write("\nOutput: %s %s\n" % (self.task, outcomment))
+            out_comment = ": %s" % comment
+        sys.stdout.write("\nOutput: %s %s\n" % (self.task, out_comment))
         sys.stdout.flush()
 
 
-def filterDicomPixels(dicomData):
-    pixelArray = dicomData.pixel_array
+def filterDicomPixels(dicom_data: FileDataset) -> np.ndarray:
+    pixel_array = dicom_data.pixel_array
 
-    ii = pixelArray < 0
-    pixelArray[ii] = 0
+    ii = pixel_array < 0
+    pixel_array[ii] = 0
 
     # Find max/min values.
-    minPixel = pixelArray.min()
-    maxPixel = pixelArray.max()
+    min_pixel = pixel_array.min()
+    max_pixel = pixel_array.max()
 
     # Adjust range of pixels
-    pixelRange = maxPixel - minPixel
-    scalePixel = 255. / pixelRange
-    newPixelArray = scalePixel * (pixelArray - minPixel)
-    return newPixelArray
+    pixel_range = max_pixel - min_pixel
+    scale_pixel = 255. / pixel_range
+    new_pixel_array = scale_pixel * (pixel_array - min_pixel)
+    return new_pixel_array
 
 
-def _get_larget_series(series):
+def _get_larget_series(series: List[DicomSeries]) -> DicomSeries:
     """
     Return the series with the most number of slices
     """
@@ -115,7 +117,11 @@ def _get_larget_series(series):
     return largest_series
 
 
-def load_series(folder, filepat=None, suid=None, readall=False):
+def load_series(
+        folder: str,
+        filepat: Optional[str] = None,
+        suid: Optional[str] = None,
+        readall: bool = False) -> List[DicomSeries]:
     """
     Reads DICOM files in a specified folder and returns one or more
     image series. By default, only returns the series with the
@@ -141,16 +147,16 @@ def load_series(folder, filepat=None, suid=None, readall=False):
     """
 
     # Get directory list of files
-    directoryList = sorted(os.listdir(folder))
+    directory_list = sorted(os.listdir(folder))
 
     if filepat is not None:
         # Find file pattern in directory list of files
-        reFilePattern = re.compile(filepat, re.IGNORECASE)
-        files = [os.path.join(folder, f) for f in directoryList if reFilePattern.search(f)]
+        re_file_pattern = re.compile(filepat, re.IGNORECASE)
+        files = [os.path.join(folder, f) for f in directory_list if re_file_pattern.search(f)]
         if len(files) == 0:
             raise IOError('No files found')
     else:
-        files = [os.path.join(folder, f) for f in directoryList]
+        files = [os.path.join(folder, f) for f in directory_list]
 
     # load series
     log.debug(('Reading {} slices.'.format(len(files))))
@@ -158,6 +164,7 @@ def load_series(folder, filepat=None, suid=None, readall=False):
         files, showProgress=True, readPixelData=False
     )
 
+    ret_series = []
     if not readall:
         if suid is None:
             ret_series = _get_larget_series(series)
@@ -178,7 +185,10 @@ def load_series(folder, filepat=None, suid=None, readall=False):
     return ret_series
 
 
-def series_affines(stack, default_patient_position='FFS', invertz=False):
+def series_affines(
+        stack: DicomSeries,
+        default_patient_position: str = 'FFS',
+        invertz: bool = False) -> Tuple[np.ndarray, np.ndarray]:
     """
     Returns the index 2 coordinates and vice versa affine matrix for a dicom series
 
@@ -190,19 +200,19 @@ def series_affines(stack, default_patient_position='FFS', invertz=False):
     PS = numpy.array([float(x) for x in stack.info.PixelSpacing])
     T1 = numpy.array([float(x) for x in stack._datasets[0].ImagePositionPatient])
     TN = numpy.array([float(x) for x in stack._datasets[-1].ImagePositionPatient])
-    NSlices = stack.shape[0]
+    n_slices = stack.shape[0]
 
-    index2CoordA = numpy.eye(4, dtype=float)
-    index2CoordA[:3, 1] = IOP[3:] * PS[1]  # in-plane voxel spacing along a row
-    index2CoordA[:3, 0] = IOP[:3] * PS[0]  # in-plane voxel spacing along a column
-    index2CoordA[:3, 2] = (TN - T1) / (NSlices - 1)  # average slice spacing from 1st to last
-    index2CoordA[:3, 3] = T1  # last column
+    index2_coord_a = numpy.eye(4, dtype=float)
+    index2_coord_a[:3, 1] = IOP[3:] * PS[1]  # in-plane voxel spacing along a row
+    index2_coord_a[:3, 0] = IOP[:3] * PS[0]  # in-plane voxel spacing along a column
+    index2_coord_a[:3, 2] = (TN - T1) / (n_slices - 1)  # average slice spacing from 1st to last
+    index2_coord_a[:3, 3] = T1  # last column
 
     if invertz:
-        index2CoordA[:3, 2] = (T1 - TN) / (1 - NSlices)  # slice spacing
+        index2_coord_a[:3, 2] = (T1 - TN) / (1 - n_slices)  # slice spacing
 
-    coord2IndexA = inv(index2CoordA)
-    return index2CoordA, coord2IndexA
+    coord2_index_a = inv(index2_coord_a)
+    return index2_coord_a, coord2_index_a
 
 
 class Scan:
@@ -212,7 +222,7 @@ class Scan:
     USE_DICOM_AFFINE = False
     DEFAULT_PATIENT_POSITION = 'FFS'
 
-    def __init__(self, name):
+    def __init__(self, name: str):
 
         self.name = name
         self.sV = {}  # dict of subvolume names to subvolumes
@@ -224,7 +234,6 @@ class Scan:
         self.info = None
         self.slice0 = None
         self.sliceLast = None
-        # self.renderer = vtkRender.VtkImageVolumeRenderer()
         self.mesh = None
 
         self.shape = None
@@ -263,7 +272,13 @@ class Scan:
     # ==================================================================#
     # read / write methods                                             #
     # ==================================================================#
-    def setImageArray(self, I, voxelSpacing=None, voxelOrigin=None, i2cmat=None, c2imat=None):
+    def setImageArray(
+            self,
+            I: np.ndarray,
+            voxelSpacing: Optional[np.ndarray] = None,
+            voxelOrigin: Optional[np.ndarray] = None,
+            i2cmat: Optional[np.ndarray] = None,
+            c2imat: Optional[np.ndarray] = None) -> None:
         """ set object's image array
         """
         self.I = I
@@ -296,7 +311,7 @@ class Scan:
 
         return
 
-    def fromDicomSeries(self, serie: dicom_series.DicomSeries):
+    def fromDicomSeries(self, serie: dicom_series.DicomSeries) -> None:
         """
         Initialise from a DicomSeries
         """
@@ -326,33 +341,45 @@ class Scan:
             c2imat=c2i_mat
         )
 
-    def maskImage(self, mask, fillValue=None):
+    def maskImage(self, mask: np.ndarray, fillValue: Optional[Union[float, int]] = None) -> None:
 
         maskedI = ma.masked_array(self.I, mask=mask, fill_value=fillValue)
         self.I = maskedI
         self.isMasked = True
 
     # ==================================================================#
-    def loadDicomFolder(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None,
-                        newLoadMethod=True):
+    def loadDicomFolder(
+            self,
+            folder: str,
+            filter: bool = False,
+            filePattern: str = '\.dcm$',
+            sliceSpacingOveride: Optional[np.ndarray] = None,
+            nSlice: Optional[int] = None,
+            newLoadMethod: bool = True) -> None:
         if newLoadMethod:
             return self.loadDicomFolderNew(folder, filter, filePattern, sliceSpacingOveride, nSlice)
         else:
             return self.loadDicomFolderOld(folder, filter, filePattern, sliceSpacingOveride, nSlice)
 
-    def loadDicomFolderOld(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
+    def loadDicomFolderOld(
+            self,
+            folder: str,
+            filter: bool = False,
+            filePattern: str = '\.dcm$',
+            sliceSpacingOveride: Optional[np.ndarray] = None,
+            nSlice: Optional[int] = None) -> None:
 
         self.read_folder = folder
 
         # Get directory list of files
-        directoryList = os.listdir(self.read_folder)
-        directoryList.sort()
+        directory_list = os.listdir(self.read_folder)
+        directory_list.sort()
 
         # Find file pattern in directory list of files
-        reFilePattern = re.compile(filePattern, re.IGNORECASE)
+        re_file_pattern = re.compile(filePattern, re.IGNORECASE)
         files = []
-        for f in directoryList:
-            if reFilePattern.search(f):
+        for f in directory_list:
+            if re_file_pattern.search(f):
                 files.append(f)
 
         if len(files) == 0:
@@ -375,7 +402,7 @@ class Scan:
         else:
             self.I = numpy.empty([slice0.pixel_array.shape[0], slice0.pixel_array.shape[1], len(files)], dtype='int16')
 
-        poLoad = ProgressOutput("Loading scan", len(files))
+        po_load = ProgressOutput("Loading scan", len(files))
         self.sliceLocations = numpy.zeros(len(files), dtype=float)
         for sl, f in enumerate(files):
             try:
@@ -391,10 +418,10 @@ class Scan:
             else:
                 self.I[:, :, sl] = slice.pixel_array.copy()
 
-            poLoad.progress(sl + 1)
+            po_load.progress(sl + 1)
 
         self.sliceLast = slice
-        poLoad.output("{}: {} slices loaded".format(self.read_folder, sl))
+        po_load.output("{}: {} slices loaded".format(self.read_folder, sl))
 
         # reorder slices by slice location
         self.I = self.I[:, :, numpy.argsort(self.sliceLocations)]
@@ -407,7 +434,13 @@ class Scan:
         self.voxelSpacing = numpy.array([self.pixelSpacing[0], self.pixelSpacing[1], self.sliceSpacing])
         self.voxelOrigin = numpy.array(self.slice0.ImagePositionPatient)
 
-    def loadDicomFolderNew(self, folder, filter=False, filePattern='\.dcm$', sliceSpacingOveride=None, nSlice=None):
+    def loadDicomFolderNew(
+            self,
+            folder: str,
+            filter: bool = False,
+            filePattern: str = '\.dcm$',
+            sliceSpacingOveride: Optional[np.ndarray] = None,
+            nSlice: Optional[int] = None) -> None:
         """
         uses pydicom.contrib.pydicom_series.py.
 
@@ -471,52 +504,53 @@ class Scan:
         log.debug('scan ic2 matrix: {}'.format(self.index2CoordA))
 
     @staticmethod
-    def list_files(read_folder, filePattern, nSlice):
+    def list_files(read_folder: str, file_pattern: str, n_slice: int) -> List[str]:
         # Get directory list of files
-        directoryList = os.listdir(read_folder)
-        directoryList.sort()
+        directory_list = os.listdir(read_folder)
+        directory_list.sort()
+
         # Find file pattern in directory list of files
-        reFilePattern = re.compile(filePattern, re.IGNORECASE)
+        re_file_pattern = re.compile(file_pattern, re.IGNORECASE)
         files = []
-        for f in directoryList:
-            if reFilePattern.search(f):
+        for f in directory_list:
+            if re_file_pattern.search(f):
                 files.append(os.path.join(read_folder, f))
         if len(files) == 0:
             raise IOError('No files found')
-        if nSlice is not None:
-            log.debug('loading {} slices'.format(nSlice))
-            files = files[:nSlice]
+        if n_slice is not None:
+            log.debug('loading {} slices'.format(n_slice))
+            files = files[:n_slice]
         return files
 
     # ==================================================================#
-    def testPixelSpacing(self, slice):
+    def testPixelSpacing(self, dicom_slice: FileDataset) -> None:
 
-        dSlice = 0
-        sliceSliceLocation = float(slice.ImagePositionPatient[2])
+        d_slice = 0
+        slice_slice_location = float(dicom_slice.ImagePositionPatient[2])
 
         if self.pixelSpacing == None:
-            self.pixelSpacing = slice.PixelSpacing
-            self.pixelTolerance = 0.0001 * self.pixelSpacing[0];
+            self.pixelSpacing = dicom_slice.PixelSpacing
+            self.pixelTolerance = 0.0001 * self.pixelSpacing[0]
 
         if self._previousSliceLocation == None:
-            self._previousSliceLocation = sliceSliceLocation
+            self._previousSliceLocation = slice_slice_location
         elif self.sliceSpacing == None:
-            self.sliceSpacing = sliceSliceLocation - self._previousSliceLocation
-            self.sliceTolerance = 0.0001 * self.sliceSpacing;
+            self.sliceSpacing = slice_slice_location - self._previousSliceLocation
+            self.sliceTolerance = 0.0001 * self.sliceSpacing
 
-        dPixel = numpy.absolute([slice.PixelSpacing[0] - self.pixelSpacing[0], \
-                                 slice.PixelSpacing[1] - self.pixelSpacing[1]])
+        d_pixel = numpy.absolute([dicom_slice.PixelSpacing[0] - self.pixelSpacing[0],
+                                  dicom_slice.PixelSpacing[1] - self.pixelSpacing[1]])
 
         if self.sliceSpacing:
-            dSlice = numpy.absolute((sliceSliceLocation - self._previousSliceLocation) - self.sliceSpacing)
+            d_slice = numpy.absolute((slice_slice_location - self._previousSliceLocation) - self.sliceSpacing)
 
-        if dPixel[0] > self.pixelTolerance or dPixel[1] > self.pixelTolerance \
-                or dSlice > self.sliceTolerance:
-            log.debug('Warning: Inconsistent pixel or slice spacing ', dPixel, ' ', dSlice)
+        if d_pixel[0] > self.pixelTolerance or d_pixel[1] > self.pixelTolerance \
+                or d_slice > self.sliceTolerance:
+            log.debug('Warning: Inconsistent pixel or slice spacing ', d_pixel, ' ', d_slice)
 
-        self._previousSliceLocation = sliceSliceLocation
+        self._previousSliceLocation = slice_slice_location
 
-    def reorder_slices_by_location(self, order, use_slice_location):
+    def reorder_slices_by_location(self, order: str, use_slice_location: bool) -> bool:
         """
         Reorder slice by their z position. This will reorder in place
           - self.stack._datasets
@@ -580,7 +614,7 @@ class Scan:
 
         return flipped
 
-    def flip_affine_z(self):
+    def flip_affine_z(self) -> None:
         """
         Invert the scan's affine matrix in the Z axis
         """
@@ -588,27 +622,27 @@ class Scan:
         self.set_i2c_mat(i2c_new)
 
     # ================================================================ #
-    def set_i2c_mat(self, m):
+    def set_i2c_mat(self, m: np.ndarray) -> None:
         self.index2CoordA = numpy.array(m)
         self.coord2IndexA = inv(self.index2CoordA)
         self.USE_DICOM_AFFINE = True
 
-    def set_c2i_mat(self, m):
+    def set_c2i_mat(self, m: np.ndarray) -> None:
         self.coord2IndexA = numpy.array(m)
         self.index2CoordA = inv(self.coord2IndexA)
         self.USE_DICOM_AFFINE = True
 
-    def index2Coord(self, I, negSpacing=False, zShift=False):
+    def index2Coord(self, indices: np.ndarray, negSpacing: bool = False, zShift: bool = False) -> np.ndarray:
 
         if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
-            _inds = numpy.pad(I.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
+            _inds = numpy.pad(indices.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
             return numpy.dot(self.index2CoordA, _inds)[:3, :].T
         else:
             if negSpacing:
-                X = -self.voxelSpacing * I + self.voxelOrigin
+                X = -self.voxelSpacing * indices + self.voxelOrigin
             else:
-                X = self.voxelSpacing * I + self.voxelOrigin
+                X = self.voxelSpacing * indices + self.voxelOrigin
 
             if zShift:
                 if len(X.shape) == 2:
@@ -617,7 +651,12 @@ class Scan:
                     X[2] -= self.I.shape[2] * self.voxelSpacing[2]
             return X
 
-    def coord2Index(self, X, zShift=False, negSpacing=False, roundInt=True):
+    def coord2Index(
+            self,
+            coordinates: np.ndarray,
+            zShift: bool = False,
+            negSpacing: bool = False,
+            roundInt: bool = True) -> np.ndarray:
         """
         converts physical coords p into image index based on self.voxelSpacing
         and self.voxelOrigin
@@ -625,7 +664,7 @@ class Scan:
 
         if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
-            ind = numpy.pad(X.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
+            ind = numpy.pad(coordinates.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
             ind = numpy.dot(self.coord2IndexA, ind)[:3, :].T
             if roundInt:
                 ind = numpy.around(ind).astype(int)
@@ -634,10 +673,10 @@ class Scan:
             # return (p / self.voxelSpacing) + self.voxelOffset
             if negSpacing:
                 # print 'neg spacing'
-                ind = (X - self.voxelOrigin) / (-self.voxelSpacing)
+                ind = (coordinates - self.voxelOrigin) / (-self.voxelSpacing)
             else:
                 # ind = numpy.around( (X - self.voxelOffset) / (self.voxelSpacing) ).astype(int)    # original
-                ind = (X - self.voxelOrigin) / (self.voxelSpacing)
+                ind = (coordinates - self.voxelOrigin) / (self.voxelSpacing)
                 # ind = numpy.around( (X - self.voxelOrigin)/(self.voxelSpacing) ).astype(int) + [0,0,self.I.shape[2]]
 
             if roundInt:
@@ -654,7 +693,7 @@ class Scan:
             return ind
 
     # ==================================================================#
-    def checkIndexInBounds(self, ind):
+    def checkIndexInBounds(self, ind: np.ndarray) -> bool:
         """
         returns True if a voxel coord is in image array bounds.
         """
@@ -666,7 +705,7 @@ class Scan:
         else:
             return True
 
-    def checkIndexIsMasked(self, ind):
+    def checkIndexIsMasked(self, ind: np.ndarray) -> bool:
         if not self.isMasked:
             return False
         else:
@@ -746,23 +785,19 @@ class Scan:
     #   return
 
     # ==================================================================#
-    def _updateI(self):
+    def _updateI(self) -> None:
         """ recalculates CoM and principal axes and updates renderer
         after I is modified
         """
         self.shape = self.I.shape
         self.calculateCoM()
         self.calculatePrincipalAxes()
-        # self.renderer.setImage( self.I )
-        # self.renderer.setCoM( self.CoM, self.pAxes, self.pAxesMag )
-        # ~ self.renderer.setCoM( self.CoM, self.pAxes )
-
         return
 
     # ==================================================================#
     # sub volume methods                                               #
     # ==================================================================#
-    def createSubVolumes(self, name, origin, dimension):
+    def createSubVolumes(self, name: str, origin: np.ndarray, dimension: np.ndarray) -> 'Scan':
         """ instantiate a model object from a subvolume of self.I.
         The subvolume begins at origin = [ x,y,z ] and extends in each
         direction by dimension = [ d0, d1, d2 ]
@@ -770,24 +805,24 @@ class Scan:
         returns the new subvolume instance
         """
 
-        subI = self.I[origin[0]: origin[0] + dimension[0],
-               origin[1]: origin[1] + dimension[1],
-               origin[2]: origin[2] + dimension[2]]
+        sub_i = self.I[origin[0]: origin[0] + dimension[0],
+                origin[1]: origin[1] + dimension[1],
+                origin[2]: origin[2] + dimension[2]]
 
-        subV = Scan(name)
-        subV.setImageArray(subI)
+        sub_v = Scan(name)
+        sub_v.setImageArray(sub_i)
 
-        self.sV[name] = subV
+        self.sV[name] = sub_v
 
-        return subV
+        return sub_v
 
     # ==================================================================#
-    def createSubSlice(self, axis, number):
+    def createSubSlice(self, axis: np.ndarray, number: int) -> Optional['Slice']:
         """ instantiates a subslice object
         """
 
         if number > self.I.shape[axis]:
-            log.debug('ERROR: Scan.createSubSlice: invalid slice number (', str(number), ') in axis', str(axis))
+            log.debug('ERROR: Scan.createSubSlice: invalid slice number %s in axis %s', str(number), str(axis))
             return
         elif axis == 0:
             return Slice(self.I[number, :, :], number, axis)
@@ -799,7 +834,13 @@ class Scan:
             log.debug('ERROR: Scan.createSubSlice: invalid axis', str(axis))
             return
 
-    def createSubSliceFromPlane(self, plane, slice_shape, res, maptoindices=True, order=1):
+    def createSubSliceFromPlane(
+            self,
+            plane: Plane,
+            slice_shape: Tuple[int, int],
+            res: Tuple[float, float],
+            maptoindices: bool = True,
+            order: int = 1) -> Tuple['Slice', np.ndarray]:
         """
         Generate a Slice in the given plane.
 
@@ -839,53 +880,45 @@ class Scan:
         return slice, sgrid_3d
 
     # ==================================================================#
-    def createSubSliceNormal(self, P, N, sliceShape=(100, 100), order=3):
+    def createSubSliceNormal(
+            self,
+            point: np.ndarray,
+            normal: np.ndarray,
+            sliceShape: Tuple[int, int] = (100, 100),
+            order: int = 3) -> 'Slice':
         """ returns image slice given a centre point P and normal vector N
         """
 
-        # create a plane with the given P and N
-        slice_plane = geoprimitives.Plane(P, N)
-
-        # reverse hack, not sure why 
-        # ~ P = numpy.array(P)[::-1]
-        # ~ N = norm(numpy.array(N))[::-1]
         # calc affine matrix going from image normal to slice normal
-        sliceV0 = N  # z
-        # ~ sliceV1 = norm( numpy.subtract( [P[0], P[1], evalPlaneZ( P, N, P[0]+1.0, P[1]+1.0 )], P ) )
-        # ~ sliceV1 = norm( numpy.subtract( [evalPlaneZ( P, N, P[2]+1.0, P[1]+1.0 ), P[1]+1.0, P[2]+1.0], P ) )  # y
-        sliceV1 = norm(numpy.subtract([evalPlaneZ(P, N, P[2] + 1.0, P[1]), P[1], P[2] + 1.0], P))  # y
-        sliceV2 = numpy.cross(sliceV0, sliceV1)  # x
+        slice_v0 = normal  # z
+        slice_v1 = norm(
+            numpy.subtract([evalPlaneZ(point, normal, point[2] + 1.0, point[1]), point[1], point[2] + 1.0], point))  # y
+        slice_v2 = numpy.cross(slice_v0, slice_v1)  # x
 
-        flatAxes = [P, numpy.eye(3, dtype=float)]
-        # ~ sliceAxes = [P, numpy.array([sliceV2, sliceV1, sliceV1]) ] # another reverse hack, not sure why either
-        sliceAxes = [P, numpy.array([sliceV0, sliceV1, sliceV2]).transpose()]
+        flat_axes = (point, numpy.eye(3, dtype=float))
+        slice_axes = (point, numpy.array([slice_v0, slice_v1, slice_v2]).transpose())
 
-        aMatrix = alignment_analytic.calcAffine(flatAxes, sliceAxes)
-        # ~ aMatrix = alignment.calcAffine( sliceAxes, flatAxes )
+        a_matrix = alignment_analytic.calcAffine(flat_axes, slice_axes)
 
         # generate grid coords to evaluate image at
-        # ~ flatX = numpy.linspace( P[0] - sliceShape[0]/2.0, P[0]+sliceShape[0]/2.0, sliceShape[0] )
-        # ~ flatY = numpy.linspace( P[1] - sliceShape[1]/2.0, P[1]+sliceShape[1]/2.0, sliceShape[1] )
-
-        flatX = numpy.linspace(P[2] - sliceShape[1] / 2.0, P[2] + sliceShape[1] / 2.0, sliceShape[1])
-        flatY = numpy.linspace(P[1] - sliceShape[0] / 2.0, P[1] + sliceShape[0] / 2.0, sliceShape[0])
-        X, Y = numpy.meshgrid(flatX, flatY)
-        xCoords = X.ravel()
-        yCoords = Y.ravel()
-        zCoords = numpy.ones(xCoords.shape[0]) * P[0]
+        flat_x = numpy.linspace(point[2] - sliceShape[1] / 2.0, point[2] + sliceShape[1] / 2.0, sliceShape[1])
+        flat_y = numpy.linspace(point[1] - sliceShape[0] / 2.0, point[1] + sliceShape[0] / 2.0, sliceShape[0])
+        X, Y = numpy.meshgrid(flat_x, flat_y)
+        x_coords = X.ravel()
+        y_coords = Y.ravel()
+        z_coords = numpy.ones(x_coords.shape[0]) * point[0]
 
         # image stack indices are z, y, x
-        # ~ flatCoords = numpy.array( [xCoords, yCoords, zCoords, numpy.ones(xCoords.shape[0])] )
-        flatCoords = numpy.array([zCoords, yCoords, xCoords, numpy.ones(xCoords.shape[0])])
-        sliceCoords = numpy.dot(aMatrix, flatCoords)
+        flat_coords = numpy.array([z_coords, y_coords, x_coords, numpy.ones(x_coords.shape[0])])
+        slice_coords = numpy.dot(a_matrix, flat_coords)
 
-        sliceArray = map_coordinates(self.I, sliceCoords, order=order)
-        sliceImage = numpy.reshape(sliceArray, sliceShape)
+        slice_array = map_coordinates(self.I, slice_coords, order=order)
+        slice_image = numpy.reshape(slice_array, sliceShape)
 
-        return Slice(sliceImage, None, None, origin=P, normal=N)
+        return Slice(slice_image, None, None, origin=point, normal=normal)
 
     # ==================================================================#
-    def calculateSubVolumeCoMs(self):
+    def calculateSubVolumeCoMs(self) -> None:
         """ calculates the CoMs of all subvolumes
         """
 
@@ -897,31 +930,31 @@ class Scan:
     # ==================================================================#
     # shape descriptor methods                                         #
     # ==================================================================#
-    def calculateCoM(self):
+    def calculateCoM(self) -> Optional[np.ndarray]:
         """ calculate self.I's centre of mass
         """
 
         # large numbers are involved
-        I = self.I.astype(numpy.int64)
-        if I.min() < 0.0:
-            I -= I.min()
+        image_arr = self.I.astype(numpy.int64)
+        if image_arr.min() < 0.0:
+            image_arr -= image_arr.min()
 
         # mass
-        self.M00 = float(I.sum())
-        self.CoM = [0.0, 0.0, 0.0]
+        self.M00 = float(image_arr.sum())
+        self.CoM = np.array([0.0, 0.0, 0.0])
 
         if self.M00 == 0.0:
             log.debug('WARNING Section ' + self.name + ': zero-mass object')
             self.isZeroMass = True
             return
         else:
-            i0 = numpy.arange(I.shape[0])
-            i1 = numpy.arange(I.shape[1])
-            i2 = numpy.arange(I.shape[2])
+            i0 = numpy.arange(image_arr.shape[0])
+            i1 = numpy.arange(image_arr.shape[1])
+            i2 = numpy.arange(image_arr.shape[2])
             # centre of mass        
-            self.CoM[0] = numpy.dot(I.sum(1).sum(1), i0) / self.M00
-            self.CoM[1] = numpy.dot(I.sum(0).sum(1), i1) / self.M00
-            self.CoM[2] = numpy.dot(I.sum(0).sum(0), i2) / self.M00
+            self.CoM[0] = numpy.dot(image_arr.sum(1).sum(1), i0) / self.M00
+            self.CoM[1] = numpy.dot(image_arr.sum(0).sum(1), i1) / self.M00
+            self.CoM[2] = numpy.dot(image_arr.sum(0).sum(0), i2) / self.M00
 
             # centered voxel coordinates
             self._iC = (i0 - self.CoM[0], i1 - self.CoM[1], i2 - self.CoM[2])
@@ -932,7 +965,7 @@ class Scan:
             return self.CoM
 
     # ==================================================================#
-    def calculatePrincipalAxes(self):
+    def calculatePrincipalAxes(self) -> Optional[Tuple[np.ndarray, np.ndarray]]:
         """ calculate self.I's principal axes and magnitudes.
         Principal axes are in the columns of self.pAxes
         """
@@ -953,11 +986,17 @@ class Scan:
         # calculate eigenvs of inertia matrix to find principal MoI
         (self.pAxesMag, self.pAxes) = eigh(self.momentMatrix)
 
-        return (self.pAxes, self.pAxesMag)
+        return self.pAxes, self.pAxesMag
 
     # ==================================================================#
-    def _calcCentralMoment(self, p, q, r, scaleNorm=1):
-        """ Calculate central geometric moments of the section image
+    def _calcCentralMoment(
+            self,
+            p: int,
+            q: int,
+            r: int,
+            scaleNorm: str = 1) -> Optional[np.ndarray]:
+        """
+        Calculate central geometric moments of the section image
         p, q, r are the orders in the x, y, z directions
         """
 
@@ -965,32 +1004,32 @@ class Scan:
             log.debug('ERROR: Scan._calcCentralMoment: zero-mass object')
             return
 
-        Itemp = self.I.astype(float)
-        if Itemp.min() < 0.0:
-            Itemp -= Itemp.min()
+        itemp = self.I.astype(float)
+        if itemp.min() < 0.0:
+            itemp -= itemp.min()
 
         if p > 0:
-            for i in range(0, Itemp.shape[0]):
-                Itemp[i, :, :] = Itemp[i, :, :] * (self._iC[0][i] ** p)
+            for i in range(0, itemp.shape[0]):
+                itemp[i, :, :] = itemp[i, :, :] * (self._iC[0][i] ** p)
 
         if q > 0:
-            for j in range(0, Itemp.shape[1]):
-                Itemp[:, j, :] = Itemp[:, j, :] * (self._iC[1][j] ** q)
+            for j in range(0, itemp.shape[1]):
+                itemp[:, j, :] = itemp[:, j, :] * (self._iC[1][j] ** q)
 
         if r > 0:
-            for k in range(0, Itemp.shape[2]):
-                Itemp[:, :, k] = Itemp[:, :, k] * (self._iC[2][k] ** r)
+            for k in range(0, itemp.shape[2]):
+                itemp[:, :, k] = itemp[:, :, k] * (self._iC[2][k] ** r)
 
         # scale normalise   
         if scaleNorm:
-            u = Itemp.sum() / (self.M00 ** (1.0 + ((p + q + r) / 3.0)))
+            u = itemp.sum() / (self.M00 ** (1.0 + ((p + q + r) / 3.0)))
         else:
-            u = Itemp.sum()
+            u = itemp.sum()
 
         return u
 
     # ==================================================================#
-    def PCA(self):
+    def PCA(self) -> None:
         self.PCA = PCA(self.I)
         self.PCA.ConstructDataArray()
         self.PCA.DoPCA()
@@ -999,8 +1038,9 @@ class Scan:
     # ==================================================================#
     # geometric transformation methods                                 #
     # ==================================================================#
-    def alignPAxes(self):
-        """ rotate the image to align the principal axes with the
+    def alignPAxes(self) -> Optional[Tuple[float, float, float]]:
+        """
+        rotate the image to align the principal axes with the
         coordinate system axes.
         
         Aligns largest pAxes with (1,0,0), 2nd largest with (0,1,0)
@@ -1008,10 +1048,10 @@ class Scan:
 
         if not self.isZeroMass:
             # calculate angle between pMax and the projection of pMax on the x-y plane
-            pMax = self.pAxes[:, self.pAxesMag.argmax()]
-            log.debug(pMax)
-            pMaxYZ = numpy.array([0.0, pMax[1], pMax[2]])
-            theta = numpy.arccos(numpy.inner(pMaxYZ, [0.0, 0.0, 1.0]) / mag(pMaxYZ))
+            p_max = self.pAxes[:, self.pAxesMag.argmax()]
+            log.debug(p_max)
+            p_max_yz = numpy.array([0.0, p_max[1], p_max[2]])
+            theta = numpy.arccos(numpy.inner(p_max_yz, [0.0, 0.0, 1.0]) / mag(p_max_yz))
             theta = -180.0 * theta / numpy.pi
             if theta > 90.0:
                 theta -= 90.0
@@ -1019,9 +1059,9 @@ class Scan:
             self.rotate(theta, (1, 2))
 
             # caculate angle between new pMax and (1,0,0)
-            pMax = self.pAxes[:, self.pAxesMag.argmax()]
-            log.debug(pMax)
-            phi = numpy.arccos(numpy.inner(pMax, [1.0, 0.0, 0.0]) / mag(pMax))
+            p_max = self.pAxes[:, self.pAxesMag.argmax()]
+            log.debug(p_max)
+            phi = numpy.arccos(numpy.inner(p_max, [1.0, 0.0, 0.0]) / mag(p_max))
             phi = -180.0 * phi / numpy.pi
             if phi > 90.0:
                 phi -= 90.0
@@ -1039,14 +1079,15 @@ class Scan:
             # rotate the image in the y-z plane so that p2 lies on [0,1,0]
             self.rotate(ro, (1, 2))
 
-            return (theta, phi, ro)
+            return theta, phi, ro
         else:
             log.debug('ERROR: Scan.alignPAxes: zero mass image')
             return None
 
     # ==================================================================#
-    def rotate(self, angle, axes):
-        """ uses numpy.ndimage.rotate to rotate self.I in the plane
+    def rotate(self, angle: float, axes: Union[List, Tuple]) -> None:
+        """
+        uses numpy.ndimage.rotate to rotate self.I in the plane
         defined by axes= [ axis1, axis2] by angle in degrees
         """
         self.I = rotate(self.I, angle, axes, order=1)
@@ -1054,7 +1095,7 @@ class Scan:
         return
 
     # ==================================================================#
-    def zoom(self, scale, order=3):
+    def zoom(self, scale: Union[float, List[float]], order: int = 3) -> None:
         """
         Uses numpy.ndimage.zoom to scale self.I by.
 
@@ -1073,16 +1114,20 @@ class Scan:
         self._updateI()
         return
 
-    def downscale(self, factors, cval=0, clip=True, copy=False):
-
+    def downscale(
+            self,
+            factors: List[float],
+            cval: int = 0,
+            clip: bool = True,
+            copy: bool = False) -> Optional['Scan']:
         if copy:
-            I = downscale_local_mean(self.I, factors, cval, clip)
-            newScan = Scan(str(self.name) + '_downscaled_{}-{}-{}'.format(*factors))
-            newVoxelSpacing = numpy.array(self.voxelSpacing) * numpy.array(factors)
-            newVoxelOrigin = numpy.array(self.voxelOrigin)
+            img_arr = downscale_local_mean(self.I, factors, cval, clip)
+            new_scan = Scan(str(self.name) + '_downscaled_{}-{}-{}'.format(*factors))
+            new_voxel_spacing = numpy.array(self.voxelSpacing) * numpy.array(factors)
+            new_voxel_origin = numpy.array(self.voxelOrigin)
 
             if self.USE_DICOM_AFFINE:
-                newScan.USE_DICOM_AFFINE = True
+                new_scan.USE_DICOM_AFFINE = True
                 tmat = numpy.eye(3)
                 tmat[[0, 1, 2], [0, 1, 2]] = factors
                 i2cmat = numpy.array(self.index2CoordA)
@@ -1091,11 +1136,11 @@ class Scan:
             else:
                 i2cmat = c2imat = None
 
-            newScan.setImageArray(
-                I, newVoxelSpacing, newVoxelOrigin, i2cmat=i2cmat, c2imat=c2imat
+            new_scan.setImageArray(
+                img_arr, new_voxel_spacing, new_voxel_origin, i2cmat=i2cmat, c2imat=c2imat
             )
 
-            return newScan
+            return new_scan
         else:
             self.I = downscale_local_mean(self.I, factors, cval, clip)
             log.debug('New image shape: {}'.format(self.I.shape))
@@ -1111,78 +1156,55 @@ class Scan:
                     self.voxelSpacing[i] *= factors[i]
 
     # ==================================================================#
-    def affine(self, matrix, offset=None, order=1):
-        """ deforms self.I using a 3x3 symmetric transformation matrix 
+    def affine(self, matrix: np.ndarray, offset: Optional[np.ndarray] = None, order: int = 1) -> None:
+        """
+        deforms self.I using a 3x3 symmetric transformation matrix
         mapping output to input. Will try to predict the output size 
         needed to capture the whole transformed image
         """
         matrix = numpy.array(matrix)
-        # ~ S = self.I.shape
-        # ~ if len( matrix.shape ) > 1:
-        # ~ box = numpy.array( [[0.0,0.0,0.0,1.0],\
-        # ~ [S[0],0.0,0.0,1.0],\
-        # ~ [0.0,S[1],0.0,1.0],\
-        # ~ [S[0],S[1],0.0,1.0],\
-        # ~ [0.0,0.0,S[2],1.0],\
-        # ~ [S[0],0.0,S[2],1.0],\
-        # ~ [0.0,S[1],S[2],1.0],\
-        # ~ [S[0],S[1],S[2],1.0]] ).transpose()
-        # ~
-        # ~ newBox = numpy.dot( inv(matrix), box[:3,:] )
-        # ~ outputShape = numpy.array( [ newBox[0].max() - newBox[0].min(),\
-        # ~ newBox[1].max() - newBox[1].min(),\
-        # ~ newBox[2].max() - newBox[2].min() ] ).round()
-        # ~ else:
-        # ~ outputShape = numpy.multiply( S, matrix ).round()
-
         outputShape = self.getAffineOutputShape(matrix)
 
-        log.debug('outputShape:', outputShape)
-        # ~ self.I = affine_transform( self.I, matrix, order=order )
+        log.debug('outputShape: %s', outputShape)
         if matrix.shape == (4, 4):
             offset = matrix[:3, 3]
             matrix = matrix[:3, :3]
 
         self.I = affine_transform(self.I, matrix, output_shape=outputShape, offset=offset, order=order)
-        log.debug('New image shape:', self.I.shape)
+        log.debug('New image shape: %s', self.I.shape)
         self._updateI()
         return
 
-    def getAffineOutputShape(self, matrix):
+    def getAffineOutputShape(self, matrix: np.ndarray) -> np.ndarray:
         matrix = numpy.array(matrix)
         S = self.I.shape
         if len(matrix.shape) > 1:
-            box = numpy.array([[0.0, 0.0, 0.0, 1.0], \
-                               [S[0], 0.0, 0.0, 1.0], \
-                               [0.0, S[1], 0.0, 1.0], \
-                               [S[0], S[1], 0.0, 1.0], \
-                               [0.0, 0.0, S[2], 1.0], \
-                               [S[0], 0.0, S[2], 1.0], \
-                               [0.0, S[1], S[2], 1.0], \
+            box = numpy.array([[0.0, 0.0, 0.0, 1.0],
+                               [S[0], 0.0, 0.0, 1.0],
+                               [0.0, S[1], 0.0, 1.0],
+                               [S[0], S[1], 0.0, 1.0],
+                               [0.0, 0.0, S[2], 1.0],
+                               [S[0], 0.0, S[2], 1.0],
+                               [0.0, S[1], S[2], 1.0],
                                [S[0], S[1], S[2], 1.0]]).transpose()
 
             newBox = numpy.dot(inv(matrix), box)
-
-            # ~ outputShape = numpy.array( [ newBox[0].max() - newBox[0].min(),\
-            # ~ newBox[1].max() - newBox[1].min(),\
-            # ~ newBox[2].max() - newBox[2].min() ] ).round()
-
-            outputShape = numpy.array([newBox[0].max(), \
-                                       newBox[1].max(), \
+            outputShape = numpy.array([newBox[0].max(),
+                                       newBox[1].max(),
                                        newBox[2].max()]).round()
         else:
             outputShape = numpy.multiply(S, matrix).round()
 
         return outputShape
 
-    def medianFilter(self, size):
+    def medianFilter(self, size: List) -> None:
         self.I = median_filter(self.I, size=size)
 
-    def gaussianFilter(self, sigma):
+    def gaussianFilter(self, sigma: float) -> None:
         self.I = gaussian_filter(self.I, sigma)
 
     # ==================================================================#
-    def pad(self, t, padval=0):
+    def pad(self, t: List[int], padval: int = 0) -> Optional[int]:
         """ pad self.I by t voxels along each edge or face with 
         value padv
         """
@@ -1212,7 +1234,7 @@ class Scan:
         return 1
 
     # ==================================================================#
-    def crop(self, pad, padv=0.0):
+    def crop(self, pad: int, padv: float = 0.0) -> int:
         """ crop self.I to a box bounding non-zero voxels padded by pad
         voxels with value padv
         """
@@ -1220,11 +1242,6 @@ class Scan:
         xrange = [nz[0].max(), nz[0].min()]
         yrange = [nz[1].max(), nz[1].min()]
         zrange = [nz[2].max(), nz[2].min()]
-
-        # ~ print "non-zero dimensions:"
-        # ~ print xrange
-        # ~ print yrange
-        # ~ print zrange
 
         cropArray = numpy.zeros([
             xrange[0] - xrange[1] + 2 * pad + 1,
@@ -1234,8 +1251,8 @@ class Scan:
         if pad:
             cropArray += padv
 
-        log.debug("precrop shape = ", self.I.shape)
-        log.debug("crop shape = ", cropArray.shape)
+        log.debug("precrop shape = %s", self.I.shape)
+        log.debug("crop shape = %s", cropArray.shape)
 
         if pad == 0:
             cropArray = self.I[
@@ -1253,23 +1270,12 @@ class Scan:
         return 1
 
     # ==================================================================#
-    # ITK image processing methods                                     #
-    # ==================================================================#
-    # ~ def ITKThreshold(self, inputImage, lower, outsideValue = 0):
-    # ~ filter = itk.ThresholdImageFilter[self.imageType].New()
-    # ~ filter.SetOutsideValue(outsideValue)
-    # ~ filter.SetLower(lower)
-    # ~ self.reader.Update()
-    # ~ filter.SetInput(inputImage)
-    # ~ filter.Update()
-    # ~ self.thresholdImage = filter.GetOutput()
-    # ~ self.thresholdArray = self.GetImageArray(self.thresholdImage, self.imageType)
-    # ~ del filter
-    # ~ return self.thresholdArray
-    # return filter.GetOutput()
-
-    # ==================================================================#
-    def threshold(self, lower, outsideValue=0, replaceValue=None, inplace=True):
+    def threshold(
+            self,
+            lower: int,
+            outsideValue: int = 0,
+            replaceValue: Optional[int] = None,
+            inplace: bool = True) -> Union[int, np.ndarray]:
         if replaceValue == None:
             replaceValue = self.I
         if inplace:
@@ -1280,8 +1286,14 @@ class Scan:
             return numpy.where(self.I > lower, self.I, outsideValue)
 
     # ==================================================================#
-    def sampleImage(self, samplePoints, maptoindices=0, outputType=float, order=1, zShift=True, negSpacing=False):
-        # ~ pdb.set_trace()
+    def sampleImage(
+            self,
+            samplePoints: np.ndarray,
+            maptoindices: bool = False,
+            outputType: Type = float,
+            order: int = 1,
+            zShift: bool = True,
+            negSpacing: bool = False) -> np.ndarray:
         if maptoindices:
             samplePoints = self.coord2Index(samplePoints, zShift=zShift, negSpacing=negSpacing)
 
@@ -1289,17 +1301,7 @@ class Scan:
         return s
 
     # ==================================================================#
-    # vtk visualisation                                                #
-    # ==================================================================#
-    # def viewVolume( self ):
-    #   if self.I == None:
-    #       print 'ERROR: Scan.viewVolume: no image loaded'
-    #       return
-    #   else:
-    #       self.renderer.renderVolume()
-
-    # ==================================================================#
-    def getMIP(self, axis, sliceRange=None):
+    def getMIP(self, axis: int, sliceRange: Optional[List] = None) -> np.ndarray:
         if sliceRange == None:
             mip = numpy.fliplr(self.I.max(axis).T)
         else:
@@ -1309,14 +1311,16 @@ class Scan:
                 mip = numpy.fliplr(self.I[:, sliceRange[0]:sliceRange[1], :].max(axis).T)
             elif axis == 2:
                 mip = numpy.fliplr(self.I[:, :, sliceRange[0]:sliceRange[1]].max(axis).T)
+            else:
+                raise ValueError('Cannot get MIP along axis %s', axis)
         return mip
 
-    def viewMIP(self, axis, sliceRange=None, vmin=-200, vmax=2000):
+    def viewMIP(self, axis: int, sliceRange: Optional[List] = None, vmin: int = -200, vmax: int = 2000):
         mip = self.getMIP(axis, sliceRange)
         p = plot.imshow(mip, cmap=cm.gray, vmin=vmin, vmax=vmax)
         return p
 
-    def getSIP(self, axis, sliceRange=None):
+    def getSIP(self, axis: int, sliceRange: Optional[List] = None) -> np.ndarray:
         if sliceRange == None:
             sip = numpy.fliplr(self.I.sum(axis).T)
         else:
@@ -1326,45 +1330,18 @@ class Scan:
                 sip = numpy.fliplr(self.I[:, sliceRange[0]:sliceRange[1], :].sum(axis).T)
             elif axis == 2:
                 sip = numpy.fliplr(self.I[:, :, sliceRange[0]:sliceRange[1]].sum(axis).T)
+            else:
+                raise ValueError('Cannot get SIP along axis %s', axis)
         return sip
 
-    def viewSIP(self, axis, sliceRange=None):
+    def viewSIP(self, axis: int, sliceRange: Optional[List] = None):
         sip = self.getSIP(axis, sliceRange)
         p = plot.imshow(sip, cmap=cm.gray)
         return p
 
     # ==================================================================#
-    # def viewSurface( self, isoValue = 100 ):
-    #   if self.I == None:
-    #       print 'ERROR: Scan.viewVolume: no image loaded'
-    #       return
-    #   else:
-    #       self.renderer.renderContour( [isoValue] )
-
-    # def add_mesh_points_to_renderer( self ):
-
-    #   if self.mesh:
-    #       # get points
-    #       meshPoints = self.mesh.get_all_point_positions()
-    #       for p in meshPoints:
-    #           self.renderer.addNode( p )
-
-    # def add_mesh_landmarks_to_renderer( self ):
-    #   if self.mesh:
-    #       for p in self.mesh.named_points_map.values():
-    #           self.renderer.addNode( self.mesh.get_point_position(p), colourStr='green' )
-
-    # def restart_renderer( self ):
-
-    #   del self.renderer
-    #   self.renderer = vtkRender.vtkRenderer()
-    #   self.renderer.setImage( self.I )
-    #   self.renderer.setCoM( self.CoM, self.pAxes, self.pAxesMag )
-    #   #~ self.renderer.setCoM( self.CoM, self.pAxes )
-
-    # ==================================================================#
     # qCT methods
-    def _samplePhantoms(self, useSamples):
+    def _samplePhantoms(self, useSamples: str) -> None:
         self.phantom = phantomSampler()
         self.phantom.loadPhantomTemplate()
         self.phantom.setScan(self)
@@ -1375,7 +1352,7 @@ class Scan:
         elif useSamples == 'all':
             log.debug('average phantom values: ' + ' '.join(['%4.1f' % v.mean() for v in self.phantomValues]))
 
-    def calibrateQCT(self, useSamples='all'):
+    def calibrateQCT(self, useSamples: str = 'all') -> None:
 
         self._samplePhantoms(useSamples)
 
@@ -1496,7 +1473,7 @@ class phantomSampler(object):
 
             # ~ pdb.set_trace()
             log.debug('slice', s, 'SSD', bestErrSlice, 'mean values:',
-                  ' '.join(['%4.1f' % v for v in rodSamplesSlice.mean(1).mean(1)]))
+                      ' '.join(['%4.1f' % v for v in rodSamplesSlice.mean(1).mean(1)]))
 
             if bestErrSlice < self.SSDMax:
                 self.rodSamples.append(rodSamplesSlice)
@@ -2027,13 +2004,13 @@ def calcTheta(x, y):
     """
 
     s = (numpy.sign(x), numpy.sign(y))
-    case = {(1.0, 0.0): 0.0, \
-            (1.0, 1.0): numpy.arctan(y / x), \
-            (0.0, 1.0): numpy.pi / 2.0, \
-            (-1.0, 1.0): numpy.pi + numpy.arctan(y / x), \
-            (-1.0, 0.0): numpy.pi, \
-            (-1.0, -1.0): numpy.pi + numpy.arctan(y / x), \
-            (0.0, -1.0): numpy.pi * 1.5, \
+    case = {(1.0, 0.0): 0.0,
+            (1.0, 1.0): numpy.arctan(y / x),
+            (0.0, 1.0): numpy.pi / 2.0,
+            (-1.0, 1.0): numpy.pi + numpy.arctan(y / x),
+            (-1.0, 0.0): numpy.pi,
+            (-1.0, -1.0): numpy.pi + numpy.arctan(y / x),
+            (0.0, -1.0): numpy.pi * 1.5,
             (1.0, -1.0): 2 * numpy.pi + numpy.arctan(y / x)}
 
     return case[s]
@@ -2043,22 +2020,20 @@ def calcTheta(x, y):
 class quadraticCurve(object):
     fitTol = 0.001
 
-    def __init__(self, dimension, params=None):
+    def __init__(self, dimension: int, params: Optional[np.ndarray] = None):
         """ params = [[x1,x2,x3],[y1,y2,y3],[z1,z2,z3]]
         """
         self.params = params
         self.dimension = dimension
 
-    def setParams(self, p):
+    def setParams(self, p: np.ndarray):
         self.params = p
 
-    def eval(self, t, d=0):
+    def eval(self, t: np.ndarray, d: int = 0) -> List[np.ndarray]:
         if t < 0.0:
             t = 0.0
         elif t > 1.0:
             t = 1.0
-
-        # ~ print 'params:', self.params
 
         ret = []
         if d == 0:
@@ -2074,23 +2049,23 @@ class quadraticCurve(object):
 
         return ret
 
-    def _basis0(self, t):
+    def _basis0(self, t: float) -> List[float]:
         t2 = t * t
         p1 = 2.0 * t2 - 3.0 * t + 1
         p2 = 4.0 * t - 4.0 * t2
         p3 = 2.0 * t2 - t
         return [p1, p2, p3]
 
-    def _basis1(self, t):
+    def _basis1(self, t: float) -> List[float]:
         p1 = 4.0 * t - 3.0
         p2 = 4.0 - 8.0 * t
         p3 = 4.0 * t - 1
         return [p1, p2, p3]
 
-    def _basis2(self, t):
+    def _basis2(self, t: float) -> List[float]:
         return [4.0, -8.0, 4.0]
 
-    def findClosest(self, p):
+    def findClosest(self, p: np.ndarray) -> Tuple[np.ndarray, float]:
         """ returns coords and parameters u of point on the line closest
         to p
         """
@@ -2102,12 +2077,12 @@ class quadraticCurve(object):
 
         return pClosest, uMin
 
-    def _closestObj(self, u):
+    def _closestObj(self, u: List) -> float:
         pCurve = self.eval(u[0])
         d = euclidean(self.p, pCurve)
         return d
 
-    def fit(self, data):
+    def fit(self, data: np.ndarray) -> float:
         """ optimise curve parameters to minimise projected error to 
         data = [[xyz],[xyz],...]
         """
@@ -2123,14 +2098,13 @@ class quadraticCurve(object):
 
         return finalRMS
 
-    def _fitLsqObj(self, x):
+    def _fitLsqObj(self, x: np.ndarray) -> np.ndarray:
         """ x are the coords of the 3 nodes
         """
-        # ~ print x
         self.setParams(numpy.reshape(x, (self.dimension, 3)))
         return self._projectLsqError()
 
-    def _projectLsqError(self):
+    def _projectLsqError(self) -> np.ndarray:
         """ calculate RMS error between datapoints and their projection
         on the curve. data = [[xyz],[xyz],...]
         """
@@ -2141,28 +2115,32 @@ class quadraticCurve(object):
         err = numpy.array(err)
         rms = numpy.sqrt((err ** 2.0).mean())
         log.debug('rms error:', rms)
-        # ~ return rms
-
         return err
 
-    def getMidpoint(self):
+    def getMidpoint(self) -> np.ndarray:
         return self.params[:, 1]
 
 
 # ======================================================================#
-def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexSpace=True,
-                          zShift=True, negSpacing=False, offsetXYCoeff=1.0):
+def cropImageAroundPoints(
+        points: np.ndarray,
+        scan: Scan,
+        pad: int,
+        croppedName: Optional[str] = None,
+        transformToIndexSpace: bool = True,
+        zShift: bool = True,
+        negSpacing: bool = False,
+        offsetXYCoeff: float = 1.0) -> Tuple[Scan, np.ndarray]:
     # offsetXYCoeff = 1 for VIFM, -1 for no negSpacing (ossis)
 
     if transformToIndexSpace:
-        XImage = scan.coord2Index(points, zShift, negSpacing)
+        x_image = scan.coord2Index(points, zShift, negSpacing)
     else:
-        XImage = points
-    # XImage[:,2] -= 190
+        x_image = points
 
     # crop image to sampling range
-    maxx, maxy, maxz = (XImage.max(0) + pad).astype(int)
-    minx, miny, minz = (XImage.min(0) - pad).astype(int)
+    maxx, maxy, maxz = (x_image.max(0) + pad).astype(int)
+    minx, miny, minz = (x_image.min(0) - pad).astype(int)
     sx, sy, sz = scan.I.shape
 
     # restrict cropping to be within image size
@@ -2174,53 +2152,43 @@ def cropImageAroundPoints(points, scan, pad, croppedName=None, transformToIndexS
     minz = max(0, minz)
     log.debug('cropping max: %s, %s, %s', maxx, maxy, maxz)
     log.debug('cropping min: %s, %s, %s', minx, miny, minz)
-    cropOffset = numpy.array([minx, miny, minz])
+    crop_offset = numpy.array([minx, miny, minz])
     if not negSpacing:
         if zShift:
-            zCorrection = scan.voxelSpacing[2] * numpy.array([0.0, 0.0, (maxz - minz - scan.I.shape[2])])
+            z_correction = scan.voxelSpacing[2] * numpy.array([0.0, 0.0, (maxz - minz - scan.I.shape[2])])
         else:
-            zCorrection = [0, 0, 0]
+            z_correction = [0, 0, 0]
     else:
-        zCorrection = [0, 0, 0]
-    # zCorrection = scan.voxelSpacing[2] * numpy.array([ 0.0, 0.0, (maxz-minz) ])
-    # newScanOffset = scan.voxelOffset-cropOffset*scan.voxelSpacing+zCorrection
-    # newScanOffset = scan.voxelOrigin-cropOffset*scan.voxelSpacing+zCorrection
-    newScanOrigin = scan.voxelOrigin + offsetXYCoeff * cropOffset * scan.voxelSpacing + zCorrection
-    # newScanOrigin = scan.voxelOrigin - (cropOffset + [maxx-minx, maxy-miny,0])*scan.voxelSpacing
+        z_correction = [0, 0, 0]
+
+    new_scan_origin = scan.voxelOrigin + offsetXYCoeff * crop_offset * scan.voxelSpacing + z_correction
 
     # calculate new affine matrices
     if scan.USE_DICOM_AFFINE:
         i2cmat = scan.index2CoordA.copy()
-        i2cmat[:3, 3] = scan.index2Coord(numpy.array([cropOffset, ])).squeeze()
+        i2cmat[:3, 3] = scan.index2Coord(numpy.array([crop_offset, ])).squeeze()
         c2imat = inv(i2cmat)
     else:
         i2cmat = None
         c2imat = None
 
-    if croppedName == None:
+    if croppedName is None:
         if scan.name is None:
             croppedName = 'cropped'
         else:
             croppedName = scan.name + '_cropped'
-    croppedScan = Scan(croppedName)
-    croppedScan.USE_DICOM_AFFINE = scan.USE_DICOM_AFFINE
-    croppedScan.isMasked = scan.isMasked
-    croppedScan.setImageArray(
+    cropped_scan = Scan(croppedName)
+    cropped_scan.USE_DICOM_AFFINE = scan.USE_DICOM_AFFINE
+    cropped_scan.isMasked = scan.isMasked
+    cropped_scan.setImageArray(
         scan.I[minx:maxx, miny:maxy, minz:maxz],
         voxelSpacing=scan.voxelSpacing,
-        voxelOrigin=newScanOrigin,
+        voxelOrigin=new_scan_origin,
         i2cmat=i2cmat,
         c2imat=c2imat,
     )
 
-    # croppedScan.setImageArray(scan.I[minx:maxx,
-    #                                miny:maxy,
-    #                                minz:maxz],
-    #                         voxelSpacing=scan.voxelSpacing,
-    #                         voxelOrigin=scan.voxelOrigin-offset,
-    #                         voxelOffset=scan.voxelOffset-offset)
-
-    return croppedScan, cropOffset
+    return cropped_scan, crop_offset
 
 
 def scaleAlignScan(scan: Scan, s: Union[list, tuple, np.ndarray]) -> Tuple[Scan, List[np.ndarray]]:

@@ -1197,7 +1197,7 @@ class Scan:
 
         return outputShape
 
-    def medianFilter(self, size: List) -> None:
+    def medianFilter(self, size: Union[int, List]) -> None:
         self.I = median_filter(self.I, size=size)
 
     def gaussianFilter(self, sigma: float) -> None:

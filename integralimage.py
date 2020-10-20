@@ -25,7 +25,6 @@ if USECYTHON:
 
     pyximport.install(
         setup_args={"include_dirs": np.get_include()},
-        reload_support=True,
         language_level=3
     )
     from gias2.image_analysis import integralimagec as IIC

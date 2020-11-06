@@ -20,11 +20,8 @@ cimport numpy as np
 cimport cython
 DTYPEF = np.double
 ctypedef np.double_t DTYPEF_t
-# ctypedef double DTYPEF_t
 DTYPEI = np.int
 ctypedef np.int_t DTYPEI_t
-# DTYPEB = np.bool8
-# ctypedef np.bool8_t DTYPEB_t
 
 cdef DTYPEF_t PRECISION = 1e-16
 
@@ -42,27 +39,6 @@ cdef DTYPEI_t argmin(np.ndarray[DTYPEF_t, ndim=1] x):
             xmin = x[i]
 
     return imin
-
-@cython.boundscheck(False)
-@cython.cdivision(True)
-@cython.wraparound(False)
-cdef void project(np.ndarray[DTYPEF_t, ndim=1] d,
-                  np.ndarray[DTYPEF_t, ndim=1] u,
-                  np.ndarray[DTYPEF_t, ndim=2] B,
-                  np.ndarray[DTYPEI_t, ndim=1] modes,
-                  int nModes, int nVar,
-                  np.ndarray[DTYPEF_t, ndim=1] W):
-    cdef DTYPEF_t w
-    cdef unsigned int mi, vi, m
-
-    for mi in range(nModes):
-        w = 0.0
-        m = modes[mi]
-        for vi in range(nVar):
-            w += B[vi, m] * (d[vi] - u[vi])
-        W[mi] = w
-
-    return
 
 @cython.boundscheck(False)
 @cython.cdivision(True)
@@ -93,60 +69,6 @@ cdef DTYPEF_t mahalanobis(np.ndarray[DTYPEF_t, ndim=1] d,
 @cython.boundscheck(False)
 @cython.cdivision(True)
 @cython.wraparound(False)
-cdef DTYPEF_t mahalanobis2(np.ndarray[DTYPEF_t, ndim=1] W,
-                           np.ndarray[DTYPEF_t, ndim=1] E,
-                           np.ndarray[DTYPEI_t, ndim=1] modes,
-                           int nModes):
-    cdef DTYPEF_t d2, w, e
-    cdef unsigned int mi, m
-
-    d2 = 0.0
-    for mi in range(nModes):
-        m = modes[mi]
-        w = W[mi]
-        e = E[m]
-        if e > PRECISION:
-            d2 += (w * w) / e
-
-    return d2
-
-@cython.boundscheck(False)
-@cython.cdivision(True)
-@cython.wraparound(False)
-cdef void reconstruct(np.ndarray[DTYPEF_t, ndim=1] W,
-                      np.ndarray[DTYPEF_t, ndim=2] B,
-                      np.ndarray[DTYPEF_t, ndim=1] u,
-                      np.ndarray[DTYPEI_t, ndim=1] modes,
-                      int nModes,
-                      int nVar,
-                      np.ndarray[DTYPEF_t, ndim=1] r):
-    cdef int vi, mi, m
-
-    for vi in range(nVar):
-        r[vi] = u[vi]
-        for mi in range(nModes):
-            m = modes[mi]
-            r[vi] += B[vi, mi] * W[mi]
-
-    return
-
-@cython.boundscheck(False)
-@cython.cdivision(True)
-@cython.wraparound(False)
-cdef DTYPEF_t diffrms(np.ndarray[DTYPEF_t, ndim=1] x1,
-                      np.ndarray[DTYPEF_t, ndim=1] x2,
-                      int n):
-    cdef DTYPEF_t d, s, m
-
-    for i in range(n):
-        d = x1[i] - x2[i]
-        s += d * d
-
-    return (s / n) ** 0.5
-
-@cython.boundscheck(False)
-@cython.cdivision(True)
-@cython.wraparound(False)
 def scanProfile(np.ndarray[DTYPEF_t, ndim=1] dP, PC,
                 np.ndarray[DTYPEI_t, ndim=1] modes):
     """ finds the position of signal within P what best matches the signal
@@ -154,8 +76,6 @@ def scanProfile(np.ndarray[DTYPEF_t, ndim=1] dP, PC,
     mahalanobis distance. modes is a list of the modes on which to
     calculate the mahalanobis distance.
     """
-
-    # assert dP.dtype == DTYPEF and modes.dtype == DTYPEI
 
     cdef unsigned int ND = PC.mean.shape[0]  # length of model signal
     cdef unsigned int NModes = modes.shape[0]  # number of modes for PCA
@@ -194,11 +114,6 @@ def scanProfile(np.ndarray[DTYPEF_t, ndim=1] dP, PC,
                 dp[i] = dp[i] / psum
 
         M[s] = mahalanobis(dp, u, B, E, modes, NModes, ND)
-    # project(dp, u, B, modes, NModes, ND, W)
-    # reconstruct(W, B, u, modes, NModes, ND, r)
-    # md = mahalanobis2(W, E, modes, NModes)
-    # rms = diffrms(r, dp, ND)
-    # M[s] = md * rms
 
     # get centre index of best match
     xMin = argmin(M)

@@ -269,6 +269,10 @@ class Scan:
         del self.reader
         del self.imageType
 
+    @property
+    def image(self) -> Optional[np.ndarray]:
+        return self.I
+
     # ==================================================================#
     # read / write methods                                             #
     # ==================================================================#

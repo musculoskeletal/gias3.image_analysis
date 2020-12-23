@@ -273,6 +273,10 @@ class Scan:
     def image(self) -> Optional[np.ndarray]:
         return self.I
 
+    @image.setter
+    def image(self, image: Optional[np.ndarray]) -> None:
+        self.I = image
+
     # ==================================================================#
     # read / write methods                                             #
     # ==================================================================#

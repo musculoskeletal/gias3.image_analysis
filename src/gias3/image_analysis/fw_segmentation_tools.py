@@ -337,8 +337,8 @@ def _makeMeshFitPointProject(SSM, project_modes):
 
         # project against SSM
         pcWeights, reconDataT, dataT, reconData = PCA_fitting.project3DPointsToSSM(data, SSM, project_modes,
-                                                                                   projectVariables=variables,
-                                                                                   landmarkIs=landmark_indices,
+                                                                                   project_variables=variables,
+                                                                                   landmark_is=landmark_indices,
                                                                                    verbose=1)
         # errors
         if landmark_indices is not None:
@@ -358,8 +358,8 @@ def _makeMeshFitPointPCFit(SSM, fit_modes, mahalanobis_weight=0.0, init_rotation
 
         # project against SSM
         pcWeights, reconDataT, dataT, reconData = PCA_fitting.fitSSMTo3DPoints(
-            data, SSM, fit_modes, fitPointIndices=landmark_indices, mWeight=mahalanobis_weight,
-            initRotation=init_rotation, do_scale=do_scale, landmark_targets=landmark_targets,
+            data, SSM, fit_modes, fit_point_indices=landmark_indices, mWeight=mahalanobis_weight,
+            init_rotation=init_rotation, do_scale=do_scale, landmark_targets=landmark_targets,
             landmark_evaluator=landmark_evaluator, landmark_weights=landmark_weights,
             verbose=True)
 

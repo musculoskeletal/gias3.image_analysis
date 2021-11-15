@@ -16,7 +16,7 @@ import unittest
 
 import numpy as np
 
-from gias2.image_analysis import integralimage
+from gias3.image_analysis import integralimage
 
 
 class TestIntegralImage(unittest.TestCase):

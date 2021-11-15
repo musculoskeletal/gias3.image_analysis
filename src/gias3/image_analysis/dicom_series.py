@@ -13,8 +13,6 @@ This module can deal with gated data, in which case a DicomSeries
 instance is created for each 3D volume.
 
 """
-from __future__ import print_function
-
 import gc
 import logging
 import os
@@ -95,12 +93,12 @@ class ProgressBar(object):
         delta = int(self.length - self.nbits)
         sys.stdout.write(self.char * delta + "] " + message + "\n")
 
-    def Update(self, newProgress):
+    def Update(self, new_progress):
         """ Update progress. Progress is given as a number
         between 0 and 1.
         """
-        self.progress = newProgress
-        required = self.length * (newProgress)
+        self.progress = new_progress
+        required = self.length * (new_progress)
         delta = int(required - self.nbits)
         if delta > 0:
             sys.stdout.write(self.char * delta)
@@ -150,7 +148,7 @@ def _check_slice_distance(new_d, d, ratio):
     return (new_d > (ratio * d)) or (new_d < (d / ratio))
 
 
-def _splitSerieIfRequired(serie, series):
+def _splitSerieIfRequired(serie, series_):
     """ _splitSerieIfRequired(serie, series)
     Split the serie in multiple series if this is required.
     The choice is based on examing the image position relative to
@@ -210,7 +208,7 @@ def _splitSerieIfRequired(serie, series):
     if len(L2) > 1:
 
         # At what position are we now?
-        i = series.index(serie)
+        i = series_.index(serie)
 
         # Create new series
         series2insert = []
@@ -221,8 +219,8 @@ def _splitSerieIfRequired(serie, series):
 
         # Insert series and remove self
         for newSerie in reversed(series2insert):
-            series.insert(i, newSerie)
-        series.remove(serie)
+            series_.insert(i, newSerie)
+        series_.remove(serie)
 
 
 pixelDataTag = pydicom.tag.Tag(0x7fe0, 0x0010)
@@ -317,7 +315,7 @@ def _getPixelDataFromDataset(ds):
 # The public functions and classes
 
 
-def read_files(path, showProgress=False, readPixelData=False, force=False):
+def read_files(path, show_progress=False, read_pixel_data=False, force=False):
     """ read_files(path, showProgress=False, readPixelData=False)
 
     Reads dicom files and returns a list of DicomSeries objects, which
@@ -365,20 +363,20 @@ def read_files(path, showProgress=False, readPixelData=False, force=False):
         raise ValueError('The path argument must be a string or list.')
 
     # Set default progress callback?
-    if showProgress is True:
-        showProgress = _progressCallback
-    if not hasattr(showProgress, '__call__'):
-        showProgress = _dummyProgressCallback
+    if show_progress is True:
+        show_progress = _progressCallback
+    if not hasattr(show_progress, '__call__'):
+        show_progress = _dummyProgressCallback
 
     # Set defer size
     deferSize = 16383  # 128**2-1
-    if readPixelData:
+    if read_pixel_data:
         deferSize = None
 
     # Gather file data and put in DicomSeries
-    series = {}
+    series_local = {}
     count = 0
-    showProgress('Loading series information:')
+    show_progress('Loading series information:')
     for filename in files:
 
         # Skip DICOMDIR files
@@ -391,7 +389,7 @@ def read_files(path, showProgress=False, readPixelData=False, force=False):
         except pydicom.filereader.InvalidDicomError:
             continue  # skip non-dicom file
         except Exception as why:
-            if showProgress is _progressCallback:
+            if show_progress is _progressCallback:
                 _progressBar.PrintMessage(str(why))
             else:
                 log.debug('Warning:', why)
@@ -402,36 +400,36 @@ def read_files(path, showProgress=False, readPixelData=False, force=False):
             suid = dcm.SeriesInstanceUID
         except AttributeError:
             continue  # some other kind of dicom file
-        if suid not in series:
-            series[suid] = DicomSeries(suid, showProgress)
-        series[suid]._append(dcm)
+        if suid not in series_local:
+            series_local[suid] = DicomSeries(suid, show_progress)
+        series_local[suid]._append(dcm)
 
         # Show progress (note that we always start with a 0.0)
-        showProgress(float(count) / len(files))
+        show_progress(float(count) / len(files))
         count += 1
 
     # Finish progress
-    showProgress(None)
+    show_progress(None)
 
     # Make a list and sort, so that the order is deterministic
-    series = list(series.values())
-    series.sort(key=lambda x: x.suid)
+    series_local = list(series_local.values())
+    series_local.sort(key=lambda x: x.suid)
 
     # Split series if necessary
-    for serie in reversed([serie for serie in series]):
-        _splitSerieIfRequired(serie, series)
+    for serie in reversed([serie for serie in series_local]):
+        _splitSerieIfRequired(serie, series_local)
 
     # Finish all series
-    showProgress('Analysing series')
+    show_progress('Analysing series')
     series_ = []
-    for i in range(len(series)):
+    for i in range(len(series_local)):
         try:
-            series[i]._finish()
-            series_.append(series[i])
+            series_local[i]._finish()
+            series_.append(series_local[i])
         except Exception:
             pass  # Skip serie (probably report-like file without pixels)
-        showProgress(float(i + 1) / len(series))
-    showProgress(None)
+        show_progress(float(i + 1) / len(series_local))
+    show_progress(None)
 
     return series_
 

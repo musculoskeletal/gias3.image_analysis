@@ -52,7 +52,7 @@ def scanProfile(dP, PC, modes):
     return xMin + NMid, M[xMin], M
 
 
-def profileSearchElementPoints(epI, PPC, pModes, dP):
+def profileSearchElementPoints(epI, PPC, p_modes, dP):
     """
     profile search on the element points specificed by epI.
 
@@ -75,7 +75,7 @@ def profileSearchElementPoints(epI, PPC, pModes, dP):
     M = []
     for i, epi in enumerate(epI):
         # find best match location along profile
-        x[i], m[i], mi = scanProfile(dP[epi], PPC[epi], pModes[epi])
+        x[i], m[i], mi = scanProfile(dP[epi], PPC[epi], p_modes[epi])
         M.append(mi)
 
     M = np.array(M)
@@ -83,7 +83,7 @@ def profileSearchElementPoints(epI, PPC, pModes, dP):
     return x, m, M
 
 
-def profileSearchElementOneSide(epI, PPC, pModes, dP):
+def profileSearchElementOneSide(ep_i, PPC, p_modes, dP):
     """
     profile search in the specified elements, contraining matches to be all on one side of each element
 
@@ -110,10 +110,10 @@ def profileSearchElementOneSide(epI, PPC, pModes, dP):
     padLen = dPLen2 - pLen2
 
     # loop through each element's element points
-    for epEi in epI:
+    for epEi in ep_i:
 
         # do normal matching
-        xE, mE, ME = profileSearchElementPoints(epEi, PPC, pModes, dP)
+        xE, mE, ME = profileSearchElementPoints(epEi, PPC, p_modes, dP)
 
         # pick +ve or -ve side (which ever has more)
         pSides = np.sign(xE - dPLen2)
@@ -153,7 +153,7 @@ def profileSearchElementOneSide(epI, PPC, pModes, dP):
     return np.hstack(x), np.hstack(m), np.vstack(M)
 
 
-def profileSearchElementMedian(epI, PPC, pModes, dP, landmarkMask, outSD=1.0):
+def profileSearchElementMedian(ep_i, PPC, p_modes, dP, landmark_mask, out_sd=1.0):
     """
     profile search in the specified elements, detects outliers and finds alternative matches for them
 
@@ -184,9 +184,9 @@ def profileSearchElementMedian(epI, PPC, pModes, dP, landmarkMask, outSD=1.0):
     padLen = dPLen2 - pLen2
 
     # loop through each element's element points
-    for epEi in epI:
+    for epEi in ep_i:
 
-        epMask = landmarkMask[epEi]  # [True,False,True,True]
+        epMask = landmark_mask[epEi]  # [True,False,True,True]
         # pass if less than minValids landmarks in this element are not masked
         if sum(epMask) < minValids:
             continue
@@ -194,7 +194,7 @@ def profileSearchElementMedian(epI, PPC, pModes, dP, landmarkMask, outSD=1.0):
             epEi2 = epEi[epMask]  # [100,102,103]
 
         # do normal matching
-        xE, mE, ME = profileSearchElementPoints(epEi2, PPC, pModes, dP)
+        xE, mE, ME = profileSearchElementPoints(epEi2, PPC, p_modes, dP)
 
         # calc match position statistics
         xEMean = xE.mean()
@@ -202,7 +202,7 @@ def profileSearchElementMedian(epI, PPC, pModes, dP, landmarkMask, outSD=1.0):
         xEMedian = np.median(xE)
 
         # identify outliers
-        outI = np.where(abs(xE - xEMedian) > outSD * xEStd)[0]
+        outI = np.where(abs(xE - xEMedian) > out_sd * xEStd)[0]
 
         # for each outlier
         for i in outI:

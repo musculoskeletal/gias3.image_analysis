@@ -17,7 +17,7 @@ import pickle
 
 import numpy as np
 
-from gias2.image_analysis import haarregressionvoting as HRV
+from gias3.image_analysis import haarregressionvoting as HRV
 
 
 log = logging.getLogger(__name__)
@@ -42,7 +42,7 @@ class CLMSegmentationParams(object):
     haarMode = 'diff'
 
     def __init__(self, **params):
-        if params != None:
+        if params is not None:
             self.setParams(params)
 
     def setParams(self, params):
@@ -80,7 +80,7 @@ class CLMSegmentation(object):
     meshParamsFinal = None
     RFs = None
 
-    def __init__(self, HRVImage=None, params=None, getMeshCoords=None, fitMesh=None):
+    def __init__(self, hrv_image=None, params=None, get_mesh_coords=None, fit_mesh=None):
         """
         inputs:
         HRVImage: HaarImage instance containing the image to be segmented.
@@ -92,8 +92,8 @@ class CLMSegmentation(object):
         self.hasMaskedImage = False
         self.filterLandmarks = True
 
-        if HRVImage != None:
-            self.setHRVImage(HRVImage)
+        if hrv_image is not None:
+            self.setHRVImage(hrv_image)
 
         self.params = params
         try:
@@ -101,8 +101,8 @@ class CLMSegmentation(object):
         except AttributeError:
             pass
 
-        self.setMeshFitter(fitMesh)
-        self.setMeshCoordinatesEvaluator(getMeshCoords)
+        self.setMeshFitter(fit_mesh)
+        self.setMeshCoordinatesEvaluator(get_mesh_coords)
 
     def setMeshCoordinatesEvaluator(self, E):
         """
@@ -146,18 +146,18 @@ class CLMSegmentation(object):
                                                                                 self.params.sampleN,
                                                                                 self.params.sampleWindowSize,
                                                                                 self.params.sampleDMax,
-                                                                                zShift=self.params.imageZShift,
-                                                                                negSpacing=self.params.imageNegSpacing,
-                                                                                haarMode=self.params.haarMode,
+                                                                                z_shift=self.params.imageZShift,
+                                                                                neg_spacing=self.params.imageNegSpacing,
+                                                                                haar_mode=self.params.haarMode,
                                                                                 )
         elif self.params.sampleMode == 'random':
             disp, features = self.HRVImage.extractHaarAboutPointRandomMulti(L,
                                                                             self.params.sampleN,
                                                                             self.params.sampleWindowSize,
                                                                             self.params.sampleDMax,
-                                                                            zShift=self.params.imageZShift,
-                                                                            negSpacing=self.params.imageNegSpacing,
-                                                                            haarMode=self.params.haarMode,
+                                                                            z_shift=self.params.imageZShift,
+                                                                            neg_spacing=self.params.imageNegSpacing,
+                                                                            haar_mode=self.params.haarMode,
                                                                             )
 
         samplePointsTemp = [disp[i] + L[i] for i in range(len(L))]
@@ -183,8 +183,8 @@ class CLMSegmentation(object):
                                                                                 self.params.sampleN,
                                                                                 self.params.sampleWindowSize,
                                                                                 self.params.sampleDMax,
-                                                                                zShift=self.params.imageZShift,
-                                                                                negSpacing=self.params.imageNegSpacing,
+                                                                                z_shift=self.params.imageZShift,
+                                                                                neg_spacing=self.params.imageNegSpacing,
                                                                                 sampleMode=self.params.sampleMode,
                                                                                 )
         elif self.params.sampleMode == 'random':
@@ -192,8 +192,8 @@ class CLMSegmentation(object):
                                                                             self.params.sampleN,
                                                                             self.params.sampleWindowSize,
                                                                             self.params.sampleDMax,
-                                                                            zShift=self.params.imageZShift,
-                                                                            negSpacing=self.params.imageNegSpacing,
+                                                                            z_shift=self.params.imageZShift,
+                                                                            neg_spacing=self.params.imageNegSpacing,
                                                                             sampleMode=self.params.sampleMode,
                                                                             )
 
@@ -247,7 +247,7 @@ class CLMSegmentation(object):
         """
         return np.array([self.RFs[li].predict(f) for f in F]).squeeze()
 
-    def _processVotesFilter(self, regressResults, samplePoints):
+    def _processVotesFilter(self, regress_results, sample_points):
         """
         for each landmark, process its regressed votes into data points
         and weights. Indices of landmarks that have failed regression are removed.
@@ -257,11 +257,11 @@ class CLMSegmentation(object):
         else:
             raise NotImplementedError
 
-        dataPoints = np.zeros((len(regressResults), 3), dtype=float)
-        weights = np.zeros((len(regressResults),), dtype=float)
+        dataPoints = np.zeros((len(regress_results), 3), dtype=float)
+        weights = np.zeros((len(regress_results),), dtype=float)
         maskPoints = []
-        for i in range(len(regressResults)):
-            dataPoints[i], weights[i] = voteProcessor(regressResults[i], samplePoints[i])
+        for i in range(len(regress_results)):
+            dataPoints[i], weights[i] = voteProcessor(regress_results[i], sample_points[i])
 
         log.debug('dataPoints shape', dataPoints.shape)
         log.debug('weights shape', weights.shape)
@@ -274,7 +274,7 @@ class CLMSegmentation(object):
 
         return dataPoints, weights
 
-    def _processVotes(self, regressResults, samplePoints, landmarks):
+    def _processVotes(self, regress_results, sample_points, landmarks):
         """
         for each landmark, process its regressed votes into data points
         and weights
@@ -282,16 +282,16 @@ class CLMSegmentation(object):
         if self.params.votingMode == 'comstd':
             voteProcessor = HRV.collectVoteCoMStd
 
-        dataPoints = np.zeros((len(regressResults), 3), dtype=float)
-        weights = np.zeros((len(regressResults),), dtype=float)
+        dataPoints = np.zeros((len(regress_results), 3), dtype=float)
+        weights = np.zeros((len(regress_results),), dtype=float)
         maskPoints = []
-        for i in range(len(regressResults)):
-            if regressResults[i] == None:
+        for i in range(len(regress_results)):
+            if regress_results[i] is None:
                 # out of bound points
                 dataPoints[i], weights[i] = landmarks[i], 0.0
                 maskPoints.append(i)
             else:
-                dataPoints[i], weights[i] = voteProcessor(regressResults[i], samplePoints[i])
+                dataPoints[i], weights[i] = voteProcessor(regress_results[i], sample_points[i])
 
         if self.params.votingMode == 'comstd':
             # convert stds into useful fitting weights (higher SD, lower weight, normalise to 0-1)
@@ -334,9 +334,9 @@ class CLMSegmentation(object):
         landmarkIndices = np.arange(len(landmarks))
 
         # first reject any point outside of the image volume
-        inds = self.HRVImage.coord2Index(np.array(landmarks), \
-                                         zShift=self.params.imageZShift, \
-                                         negSpacing=self.params.imageNegSpacing)
+        inds = self.HRVImage.coord2Index(np.array(landmarks),
+                                         z_shift=self.params.imageZShift,
+                                         neg_spacing=self.params.imageNegSpacing)
 
         if self.hasMaskedImage:
             validLandmarkIndices = [li for li in landmarkIndices if (
@@ -348,7 +348,7 @@ class CLMSegmentation(object):
 
         return validLandmarkIndices, validLandmarks
 
-    def segment(self, meshParams0, verbose=1, debug=0):
+    def segment(self, mesh_params0, verbose=1, debug=0):
         """
         Run the main segmentation loop. See class docstring for general overview.
         Due to masked images or out of FOV objects, the number of segmented dataPoints (n')
@@ -373,7 +373,7 @@ class CLMSegmentation(object):
         it = 0
         meshRMSOld = -1.0
         meshSDOld = -1.0
-        meshParams = np.array(meshParams0)
+        meshParams = np.array(mesh_params0)
         converged = False
         outputHistory = {'meshParams': [],
                          'meshRMS': [],

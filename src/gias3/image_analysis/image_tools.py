@@ -31,12 +31,12 @@ from scipy.spatial.distance import euclidean
 from scipy.stats import linregress
 from skimage.transform import downscale_local_mean
 
-from gias2.common.geoprimitives import Plane
-from gias2.image_analysis import dicom_series
-from gias2.image_analysis.dicom_series import DicomSeries
-from gias2.learning.PCA import PCA
-from gias2.registration import alignment_analytic
-from gias2.registration.alignment_analytic import calcAffine
+from gias3.common.geoprimitives import Plane
+from gias3.image_analysis import dicom_series
+from gias3.image_analysis.dicom_series import DicomSeries
+from gias3.learning.PCA import PCA
+from gias3.registration import alignment_analytic
+from gias3.registration.alignment_analytic import calcAffine
 
 log = logging.getLogger(__name__)
 
@@ -62,7 +62,7 @@ class PhantomError(Exception):
     pass
 
 
-class ProgressOutput:
+class ProgressOutput(object):
 
     def __init__(self, task: str, total: Union[float, int]):
         self.task = task
@@ -161,7 +161,7 @@ def load_series(
     # load series
     log.debug(('Reading {} slices.'.format(len(files))))
     series = dicom_series.read_files(
-        files, showProgress=True, readPixelData=False
+        files, show_progress=True, read_pixel_data=False
     )
 
     ret_series = []
@@ -215,7 +215,7 @@ def series_affines(
     return index2_coord_a, coord2_index_a
 
 
-class Scan:
+class Scan(object):
     """ Class for reading and limited manipulation of an image stack
     """
 
@@ -283,8 +283,8 @@ class Scan:
     def setImageArray(
             self,
             I: np.ndarray,
-            voxelSpacing: Optional[np.ndarray] = None,
-            voxelOrigin: Optional[np.ndarray] = None,
+            voxel_spacing: Optional[np.ndarray] = None,
+            voxel_origin: Optional[np.ndarray] = None,
             i2cmat: Optional[np.ndarray] = None,
             c2imat: Optional[np.ndarray] = None) -> None:
         """ set object's image array
@@ -293,13 +293,13 @@ class Scan:
         self.calculateCoM()
         self.calculatePrincipalAxes()
 
-        if voxelSpacing is not None:
-            self.voxelSpacing = numpy.array(voxelSpacing)
+        if voxel_spacing is not None:
+            self.voxelSpacing = numpy.array(voxel_spacing)
         else:
             self.voxelSpacing = numpy.array([1.0, 1.0, 1.0])
 
-        if voxelOrigin is not None:
-            self.voxelOrigin = numpy.array(voxelOrigin)
+        if voxel_origin is not None:
+            self.voxelOrigin = numpy.array(voxel_origin)
         else:
             self.voxelOrigin = numpy.array([0.0, 0.0, 0.0])
 
@@ -319,39 +319,39 @@ class Scan:
 
         return
 
-    def fromDicomSeries(self, serie: dicom_series.DicomSeries) -> None:
+    def fromDicomSeries(self, series: dicom_series.DicomSeries) -> None:
         """
         Initialise from a DicomSeries
         """
 
         # instantiate and copy properties
-        self.slice0 = serie._datasets[0]
-        self.stack = serie
-        self.info = serie.info
+        self.slice0 = series._datasets[0]
+        self.stack = series
+        self.info = series.info
 
         try:
-            self.sliceLocations = [float(s.SliceLocation) for s in serie._datasets]
+            self.sliceLocations = [float(s.SliceLocation) for s in series._datasets]
         except AttributeError:
             log.debug('No slice location in serie, falling back to ImagePositionPatient')
-            self.sliceLocations = [float(s.ImagePositionPatient[2]) for s in serie._datasets]
+            self.sliceLocations = [float(s.ImagePositionPatient[2]) for s in series._datasets]
 
         # load the image array
-        voxel_array = serie.get_pixel_array().astype(numpy.int16)
+        voxel_array = series.get_pixel_array().astype(numpy.int16)
         # set axes to be l-r, a-p, s-i
         voxel_array = voxel_array.transpose([2, 1, 0])
         # get transformation matrices
-        i2c_mat, c2i_mat = series_affines(serie)
+        i2c_mat, c2i_mat = series_affines(series)
         self.setImageArray(
             voxel_array,
-            voxelSpacing=numpy.array(serie.sampling[::-1]),
-            voxelOrigin=numpy.array(serie.info.ImagePositionPatient),
+            voxel_spacing=numpy.array(series.sampling[::-1]),
+            voxel_origin=numpy.array(series.info.ImagePositionPatient),
             i2cmat=i2c_mat,
             c2imat=c2i_mat
         )
 
-    def maskImage(self, mask: np.ndarray, fillValue: Optional[Union[float, int]] = None) -> None:
+    def maskImage(self, mask: np.ndarray, fill_value: Optional[Union[float, int]] = None) -> None:
 
-        maskedI = ma.masked_array(self.I, mask=mask, fill_value=fillValue)
+        maskedI = ma.masked_array(self.I, mask=mask, fill_value=fill_value)
         self.I = maskedI
         self.isMasked = True
 
@@ -359,23 +359,23 @@ class Scan:
     def loadDicomFolder(
             self,
             folder: str,
-            filter: bool = False,
-            filePattern: str = '\.dcm$',
-            sliceSpacingOveride: Optional[np.ndarray] = None,
-            nSlice: Optional[int] = None,
-            newLoadMethod: bool = True) -> None:
-        if newLoadMethod:
-            return self.loadDicomFolderNew(folder, filter, filePattern, sliceSpacingOveride, nSlice)
+            filter_: bool = False,
+            file_pattern: str = '\.dcm$',
+            slice_spacing_overide: Optional[np.ndarray] = None,
+            n_slice: Optional[int] = None,
+            new_load_method: bool = True) -> None:
+        if new_load_method:
+            return self.loadDicomFolderNew(folder, filter_, file_pattern, slice_spacing_overide, n_slice)
         else:
-            return self.loadDicomFolderOld(folder, filter, filePattern, sliceSpacingOveride, nSlice)
+            return self.loadDicomFolderOld(folder, filter_, file_pattern, slice_spacing_overide, n_slice)
 
     def loadDicomFolderOld(
             self,
             folder: str,
-            filter: bool = False,
-            filePattern: str = '\.dcm$',
-            sliceSpacingOveride: Optional[np.ndarray] = None,
-            nSlice: Optional[int] = None) -> None:
+            filter_: bool = False,
+            file_pattern: str = '\.dcm$',
+            slice_spacing_override: Optional[np.ndarray] = None,
+            n_slice: Optional[int] = None) -> None:
 
         self.read_folder = folder
 
@@ -384,7 +384,7 @@ class Scan:
         directory_list.sort()
 
         # Find file pattern in directory list of files
-        re_file_pattern = re.compile(filePattern, re.IGNORECASE)
+        re_file_pattern = re.compile(file_pattern, re.IGNORECASE)
         files = []
         for f in directory_list:
             if re_file_pattern.search(f):
@@ -393,9 +393,9 @@ class Scan:
         if len(files) == 0:
             raise IOError('No files found')
 
-        if nSlice != None:
-            log.debug('loading %i slices' % (nSlice))
-            files = [files[i] for i in range(nSlice)]
+        if n_slice is not None:
+            log.debug('loading %i slices' % (n_slice))
+            files = [files[i] for i in range(n_slice)]
 
         # Open a file to get image size
         try:
@@ -405,7 +405,7 @@ class Scan:
         self.slice0 = slice0
 
         # Read images into array I
-        if filter:
+        if filter_:
             self.I = numpy.empty([slice0.pixel_array.shape[0], slice0.pixel_array.shape[1], len(files)], dtype='uint8')
         else:
             self.I = numpy.empty([slice0.pixel_array.shape[0], slice0.pixel_array.shape[1], len(files)], dtype='int16')
@@ -414,28 +414,28 @@ class Scan:
         self.sliceLocations = numpy.zeros(len(files), dtype=float)
         for sl, f in enumerate(files):
             try:
-                slice = pydicom.dcmread(os.path.join(self.read_folder, f), force=True)
+                slice_ = pydicom.dcmread(os.path.join(self.read_folder, f), force=True)
             except TypeError:
-                slice = pydicom.dcmread(os.path.join(self.read_folder, f))
+                slice_ = pydicom.dcmread(os.path.join(self.read_folder, f))
 
-            self.testPixelSpacing(slice)
-            self.sliceLocations[sl] = float(slice.ImagePositionPatient[2])
+            self.testPixelSpacing(slice_)
+            self.sliceLocations[sl] = float(slice_.ImagePositionPatient[2])
 
-            if filter:
-                self.I[:, :, sl] = filterDicomPixels(slice)
+            if filter_:
+                self.I[:, :, sl] = filterDicomPixels(slice_)
             else:
-                self.I[:, :, sl] = slice.pixel_array.copy()
+                self.I[:, :, sl] = slice_.pixel_array.copy()
 
             po_load.progress(sl + 1)
 
-        self.sliceLast = slice
+        self.sliceLast = slice_
         po_load.output("{}: {} slices loaded".format(self.read_folder, sl))
 
-        # reorder slices by slice location
+        # reorder slices by slice_ location
         self.I = self.I[:, :, numpy.argsort(self.sliceLocations)]
 
-        if sliceSpacingOveride != None:
-            self.sliceSpacing = sliceSpacingOveride
+        if slice_spacing_override != None:
+            self.sliceSpacing = slice_spacing_override
 
         # set axes to be l-r, a-p, s-i
         self.I = self.I.transpose([1, 0, 2])  # original
@@ -445,10 +445,10 @@ class Scan:
     def loadDicomFolderNew(
             self,
             folder: str,
-            filter: bool = False,
-            filePattern: str = '\.dcm$',
-            sliceSpacingOveride: Optional[np.ndarray] = None,
-            nSlice: Optional[int] = None) -> None:
+            filter_: bool = False,
+            file_pattern: str = '\.dcm$',
+            slice_spacing_overide: Optional[np.ndarray] = None,
+            n_slice: Optional[int] = None) -> None:
         """
         uses pydicom.contrib.pydicom_series.py.
 
@@ -458,7 +458,7 @@ class Scan:
 
         log.debug('loading folder ' + folder)
         self.read_folder = folder
-        files = self.list_files(self.read_folder, filePattern, nSlice)
+        files = self.list_files(self.read_folder, file_pattern, n_slice)
 
         # Open a file to get image size
         try:
@@ -471,11 +471,11 @@ class Scan:
         log.debug(('Loading {} slices.'.format(len(files))))
         try:
             stacks = dicom_series.read_files(
-                files, showProgress=True, readPixelData=True, force=True
+                files, show_progress=True, read_pixel_data=True, force=True
             )
         except TypeError:
             stacks = dicom_series.read_files(
-                files, showProgress=True, readPixelData=True
+                files, show_progress=True, read_pixel_data=True
             )
         if len(stacks) == 0:
             raise RuntimeError('No series could read from {} files'.format(len(files)))
@@ -499,8 +499,8 @@ class Scan:
         self.voxelSpacing = numpy.array(self.stack.sampling[::-1])  # original
         # ======================================================#
 
-        if sliceSpacingOveride != None:
-            self.voxelSpacing[2] = sliceSpacingOveride
+        if slice_spacing_overide != None:
+            self.voxelSpacing[2] = slice_spacing_overide
         self.voxelOrigin = numpy.array(self.stack.info.ImagePositionPatient)
         # self.voxelOffset = self.voxelOrigin - (-1.0*self.voxelSpacing)*self.I.shape
 
@@ -536,13 +536,13 @@ class Scan:
         d_slice = 0
         slice_slice_location = float(dicom_slice.ImagePositionPatient[2])
 
-        if self.pixelSpacing == None:
+        if self.pixelSpacing is None:
             self.pixelSpacing = dicom_slice.PixelSpacing
             self.pixelTolerance = 0.0001 * self.pixelSpacing[0]
 
-        if self._previousSliceLocation == None:
+        if self._previousSliceLocation is None:
             self._previousSliceLocation = slice_slice_location
-        elif self.sliceSpacing == None:
+        elif self.sliceSpacing is None:
             self.sliceSpacing = slice_slice_location - self._previousSliceLocation
             self.sliceTolerance = 0.0001 * self.sliceSpacing
 
@@ -640,19 +640,19 @@ class Scan:
         self.index2CoordA = inv(self.coord2IndexA)
         self.USE_DICOM_AFFINE = True
 
-    def index2Coord(self, indices: np.ndarray, negSpacing: bool = False, zShift: bool = False) -> np.ndarray:
+    def index2Coord(self, indices: np.ndarray, neg_spacing: bool = False, z_shift: bool = False) -> np.ndarray:
 
         if self.USE_DICOM_AFFINE:
             # Transform by affine matrix, experimental
             _inds = numpy.pad(indices.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
             return numpy.dot(self.index2CoordA, _inds)[:3, :].T
         else:
-            if negSpacing:
+            if neg_spacing:
                 X = -self.voxelSpacing * indices + self.voxelOrigin
             else:
                 X = self.voxelSpacing * indices + self.voxelOrigin
 
-            if zShift:
+            if z_shift:
                 if len(X.shape) == 2:
                     X[:, 2] -= self.I.shape[2] * self.voxelSpacing[2]
                 elif len(X.shape) == 1:
@@ -662,9 +662,9 @@ class Scan:
     def coord2Index(
             self,
             coordinates: np.ndarray,
-            zShift: bool = False,
-            negSpacing: bool = False,
-            roundInt: bool = True) -> np.ndarray:
+            z_shift: bool = False,
+            neg_spacing: bool = False,
+            round_int: bool = True) -> np.ndarray:
         """
         converts physical coords p into image index based on self.voxelSpacing
         and self.voxelOrigin
@@ -674,12 +674,12 @@ class Scan:
             # Transform by affine matrix, experimental
             ind = numpy.pad(coordinates.T, ((0, 1), (0, 0)), 'constant', constant_values=1)
             ind = numpy.dot(self.coord2IndexA, ind)[:3, :].T
-            if roundInt:
+            if round_int:
                 ind = numpy.around(ind).astype(int)
             return ind
         else:
             # return (p / self.voxelSpacing) + self.voxelOffset
-            if negSpacing:
+            if neg_spacing:
                 # print 'neg spacing'
                 ind = (coordinates - self.voxelOrigin) / (-self.voxelSpacing)
             else:
@@ -687,10 +687,10 @@ class Scan:
                 ind = (coordinates - self.voxelOrigin) / (self.voxelSpacing)
                 # ind = numpy.around( (X - self.voxelOrigin)/(self.voxelSpacing) ).astype(int) + [0,0,self.I.shape[2]]
 
-            if roundInt:
+            if round_int:
                 ind = numpy.around(ind).astype(int)
 
-            if zShift:
+            if z_shift:
                 # print 'z shifting'
                 if len(ind.shape) == 2:
                     ind[:, 2] += self.I.shape[2]
@@ -876,7 +876,7 @@ class Scan:
 
         # map 3D sampline coordinates to scan index space
         if maptoindices:
-            sgrid_3d = self.coord2Index(sgrid_3d, roundInt=False)
+            sgrid_3d = self.coord2Index(sgrid_3d, round_int=False)
 
         # sample scan
         samples = self.sampleImage(
@@ -892,7 +892,7 @@ class Scan:
             self,
             point: np.ndarray,
             normal: np.ndarray,
-            sliceShape: Tuple[int, int] = (100, 100),
+            slice_shape: Tuple[int, int] = (100, 100),
             order: int = 3) -> 'Slice':
         """ returns image slice given a centre point P and normal vector N
         """
@@ -909,8 +909,8 @@ class Scan:
         a_matrix = alignment_analytic.calcAffine(flat_axes, slice_axes)
 
         # generate grid coords to evaluate image at
-        flat_x = numpy.linspace(point[2] - sliceShape[1] / 2.0, point[2] + sliceShape[1] / 2.0, sliceShape[1])
-        flat_y = numpy.linspace(point[1] - sliceShape[0] / 2.0, point[1] + sliceShape[0] / 2.0, sliceShape[0])
+        flat_x = numpy.linspace(point[2] - slice_shape[1] / 2.0, point[2] + slice_shape[1] / 2.0, slice_shape[1])
+        flat_y = numpy.linspace(point[1] - slice_shape[0] / 2.0, point[1] + slice_shape[0] / 2.0, slice_shape[0])
         X, Y = numpy.meshgrid(flat_x, flat_y)
         x_coords = X.ravel()
         y_coords = Y.ravel()
@@ -921,7 +921,7 @@ class Scan:
         slice_coords = numpy.dot(a_matrix, flat_coords)
 
         slice_array = map_coordinates(self.I, slice_coords, order=order)
-        slice_image = numpy.reshape(slice_array, sliceShape)
+        slice_image = numpy.reshape(slice_array, slice_shape)
 
         return Slice(slice_image, None, None, origin=point, normal=normal)
 
@@ -1002,7 +1002,7 @@ class Scan:
             p: int,
             q: int,
             r: int,
-            scaleNorm: str = 1) -> Optional[np.ndarray]:
+            scale_norm: str = 1) -> Optional[np.ndarray]:
         """
         Calculate central geometric moments of the section image
         p, q, r are the orders in the x, y, z directions
@@ -1029,7 +1029,7 @@ class Scan:
                 itemp[:, :, k] = itemp[:, :, k] * (self._iC[2][k] ** r)
 
         # scale normalise   
-        if scaleNorm:
+        if scale_norm:
             u = itemp.sum() / (self.M00 ** (1.0 + ((p + q + r) / 3.0)))
         else:
             u = itemp.sum()
@@ -1281,88 +1281,88 @@ class Scan:
     def threshold(
             self,
             lower: int,
-            outsideValue: int = 0,
-            replaceValue: Optional[int] = None,
+            outside_value: int = 0,
+            replace_value: Optional[int] = None,
             inplace: bool = True) -> Union[int, np.ndarray]:
-        if replaceValue == None:
-            replaceValue = self.I
+        if replace_value is None:
+            replace_value = self.I
         if inplace:
-            temp = numpy.where(self.I > lower, replaceValue, outsideValue)
+            temp = numpy.where(self.I > lower, replace_value, outside_value)
             self.setImageArray(temp)
             return 1
         else:
-            return numpy.where(self.I > lower, self.I, outsideValue)
+            return numpy.where(self.I > lower, self.I, outside_value)
 
     # ==================================================================#
     def sampleImage(
             self,
-            samplePoints: np.ndarray,
+            sample_points: np.ndarray,
             maptoindices: bool = False,
-            outputType: Type = float,
+            output_type: Type = float,
             order: int = 1,
-            zShift: bool = True,
-            negSpacing: bool = False) -> np.ndarray:
+            z_shift: bool = True,
+            neg_spacing: bool = False) -> np.ndarray:
         if maptoindices:
-            samplePoints = self.coord2Index(samplePoints, zShift=zShift, negSpacing=negSpacing)
+            sample_points = self.coord2Index(sample_points, z_shift=z_shift, neg_spacing=neg_spacing)
 
-        s = map_coordinates(self.I, samplePoints.T, output=outputType, order=order)
+        s = map_coordinates(self.I, sample_points.T, output=output_type, order=order)
         return s
 
     # ==================================================================#
-    def getMIP(self, axis: int, sliceRange: Optional[List] = None) -> np.ndarray:
-        if sliceRange == None:
+    def getMIP(self, axis: int, slice_range: Optional[List] = None) -> np.ndarray:
+        if slice_range is None:
             mip = numpy.fliplr(self.I.max(axis).T)
         else:
             if axis == 0:
-                mip = numpy.fliplr(self.I[sliceRange[0]:sliceRange[1], :, :].max(axis).T)
+                mip = numpy.fliplr(self.I[slice_range[0]:slice_range[1], :, :].max(axis).T)
             elif axis == 1:
-                mip = numpy.fliplr(self.I[:, sliceRange[0]:sliceRange[1], :].max(axis).T)
+                mip = numpy.fliplr(self.I[:, slice_range[0]:slice_range[1], :].max(axis).T)
             elif axis == 2:
-                mip = numpy.fliplr(self.I[:, :, sliceRange[0]:sliceRange[1]].max(axis).T)
+                mip = numpy.fliplr(self.I[:, :, slice_range[0]:slice_range[1]].max(axis).T)
             else:
                 raise ValueError('Cannot get MIP along axis %s', axis)
         return mip
 
-    def viewMIP(self, axis: int, sliceRange: Optional[List] = None, vmin: int = -200, vmax: int = 2000):
-        mip = self.getMIP(axis, sliceRange)
+    def viewMIP(self, axis: int, slice_range: Optional[List] = None, vmin: int = -200, vmax: int = 2000):
+        mip = self.getMIP(axis, slice_range)
         p = plot.imshow(mip, cmap=cm.gray, vmin=vmin, vmax=vmax)
         return p
 
-    def getSIP(self, axis: int, sliceRange: Optional[List] = None) -> np.ndarray:
-        if sliceRange == None:
+    def getSIP(self, axis: int, slice_range: Optional[List] = None) -> np.ndarray:
+        if slice_range is None:
             sip = numpy.fliplr(self.I.sum(axis).T)
         else:
             if axis == 0:
-                sip = numpy.fliplr(self.I[sliceRange[0]:sliceRange[1], :, :].sum(axis).T)
+                sip = numpy.fliplr(self.I[slice_range[0]:slice_range[1], :, :].sum(axis).T)
             elif axis == 1:
-                sip = numpy.fliplr(self.I[:, sliceRange[0]:sliceRange[1], :].sum(axis).T)
+                sip = numpy.fliplr(self.I[:, slice_range[0]:slice_range[1], :].sum(axis).T)
             elif axis == 2:
-                sip = numpy.fliplr(self.I[:, :, sliceRange[0]:sliceRange[1]].sum(axis).T)
+                sip = numpy.fliplr(self.I[:, :, slice_range[0]:slice_range[1]].sum(axis).T)
             else:
                 raise ValueError('Cannot get SIP along axis %s', axis)
         return sip
 
-    def viewSIP(self, axis: int, sliceRange: Optional[List] = None):
-        sip = self.getSIP(axis, sliceRange)
+    def viewSIP(self, axis: int, slice_range: Optional[List] = None):
+        sip = self.getSIP(axis, slice_range)
         p = plot.imshow(sip, cmap=cm.gray)
         return p
 
     # ==================================================================#
     # qCT methods
-    def _samplePhantoms(self, useSamples: str) -> None:
-        self.phantom = phantomSampler()
+    def _samplePhantoms(self, use_samples: str) -> None:
+        self.phantom = PhantomSampler()
         self.phantom.loadPhantomTemplate()
         self.phantom.setScan(self)
-        self.phantomValues = self.phantom.samplePhantoms(useSamples)
+        self.phantomValues = self.phantom.samplePhantoms(use_samples)
 
-        if useSamples == 'mean':
+        if use_samples == 'mean':
             log.debug('average phantom values: ' + ' '.join(['%4.1f' % v for v in self.phantomValues]))
-        elif useSamples == 'all':
+        elif use_samples == 'all':
             log.debug('average phantom values: ' + ' '.join(['%4.1f' % v.mean() for v in self.phantomValues]))
 
-    def calibrateQCT(self, useSamples: str = 'all') -> None:
+    def calibrateQCT(self, use_samples: str = 'all') -> None:
 
-        self._samplePhantoms(useSamples)
+        self._samplePhantoms(use_samples)
 
         self.qCT = qCTLookup()
         self.qCT.setPhantomValues(self.phantomValues)
@@ -1401,7 +1401,7 @@ class qCTLookup(object):
 
     def calibrate(self):
         # fit straight line to K2HPO4Density(x) vs self.phantomValuesMinusWater(y)
-        if self.phantomValuesMinusWater == None:
+        if self.phantomValuesMinusWater is None:
             raise AttributeError('no phantom values set')
 
         # if multiple values for each rod
@@ -1429,7 +1429,8 @@ class qCTLookup(object):
         return bmd
 
 
-class phantomSampler(object):
+class PhantomSampler(object):
+    # What?????
     phantomImageFilename = '../CT_scans/phantom_template_2008_0909.npy'
     phantomImageSpacing = numpy.array([1.19, 1.19, 1.6])
     phantomMidY = 16
@@ -1458,6 +1459,9 @@ class phantomSampler(object):
         self.phantomOrigin = None
         self.bestProfile = None
         self.bestErr = None
+        self.scanSampleCoords = None
+        self.phantomSampleCoords = None
+        self.bestProfiles = None
 
     def setScan(self, scan):
         self.scan = scan
@@ -1468,7 +1472,7 @@ class phantomSampler(object):
         self.phantomSampleCoords = numpy.arange(0, self.phantomImage.shape[0] - 1,
                                                 self.res / self.phantomImageSpacing[0])
 
-    def samplePhantoms(self, useSamples='all'):
+    def samplePhantoms(self, use_samples='all'):
         self.rodSamples = []  # shape: [slice, rods, x, y]
         self.bestProfiles = []
         self.bestErr = []
@@ -1490,7 +1494,7 @@ class phantomSampler(object):
             else:
                 log.debug('dropped')
 
-        self.rodValues = self._calcRodValues(useSamples)
+        self.rodValues = self._calcRodValues(use_samples)
         return self.rodValues
 
     def _calcRodValues(self, mode):
@@ -1509,16 +1513,16 @@ class phantomSampler(object):
 
         return self.rodValues
 
-    def _scanProfile(self, p, func, filterLength):
-        pPadded = numpy.hstack((p, [p[-1]] * (filterLength - 1)))
+    def _scanProfile(self, p, func, filter_length):
+        pPadded = numpy.hstack((p, [p[-1]] * (filter_length - 1)))
         out = numpy.zeros(len(p))
         for i in range(len(p)):
-            out[i] = func(pPadded[i:i + filterLength])
+            out[i] = func(pPadded[i:i + filter_length])
         return out
 
-    def _findPhantomInSlice(self, templateProfile, scanSlice):
+    def _findPhantomInSlice(self, template_profile, scan_slice):
 
-        tempPRaw = map_coordinates(templateProfile, [self.phantomSampleCoords])
+        tempPRaw = map_coordinates(template_profile, [self.phantomSampleCoords])
         tempP = gaussian_filter1d(tempPRaw, self.sigma)
         tempPN = tempP / max(abs(tempP))
 
@@ -1534,7 +1538,7 @@ class phantomSampler(object):
         bestProfile = None
 
         for i, y in enumerate(self.yRange):
-            dataPRaw = map_coordinates(self.scan.I[:, y, scanSlice], [self.scanSampleCoords])
+            dataPRaw = map_coordinates(self.scan.I[:, y, scan_slice], [self.scanSampleCoords])
             dataP = gaussian_filter1d(dataPRaw, self.sigma)
 
             err = self._scanProfile(dataP, NSSD, len(tempPN))
@@ -1559,15 +1563,15 @@ class phantomSampler(object):
 
         return errors, phantomOrigin, [x1, x2], [X1, X2], bestProfile, bestErr
 
-    def _samplePhantomSlice(self, halfW, phantomOrigin, scanSlice):
+    def _samplePhantomSlice(self, half_w, phantom_origin, scan_slice):
         # ~ phantomOrigin = [X2, X1 - (16*phantomImageSpacing[0]/scan.voxelSpacing[0] )]
         rodSamples = []
         for rod in self.phantomRodCentres:
             r0 = rod[0] * self.phantomImageSpacing[0] / self.scan.voxelSpacing[0]
             r1 = rod[1] * self.phantomImageSpacing[1] / self.scan.voxelSpacing[1]
-            rodSamples.append(self.scan.I[phantomOrigin[0] + r0 - halfW: phantomOrigin[0] + r0 + halfW,
-                              phantomOrigin[1] + r1 - halfW: phantomOrigin[1] + r1 + halfW,
-                              scanSlice]
+            rodSamples.append(self.scan.I[phantom_origin[0] + r0 - half_w: phantom_origin[0] + r0 + half_w,
+                              phantom_origin[1] + r1 - half_w: phantom_origin[1] + r1 + half_w,
+                              scan_slice]
                               )
 
         return numpy.array(rodSamples)
@@ -1575,7 +1579,7 @@ class phantomSampler(object):
 
 # ======================================================================#
 # ======================================================================#
-class Slice:
+class Slice(object):
     """ 2D image class
     """
 
@@ -1645,10 +1649,10 @@ class Slice:
         # calculate eigenvs of inertia matrix to find principal MoI
         (self.pAxesMag, self.pAxes) = eigh(self.momentMatrix)
 
-        return (self.pAxes, self.pAxesMag)
+        return self.pAxes, self.pAxesMag
 
     # ==================================================================#
-    def _calcCentralMoment(self, p, q, scaleNorm=1):
+    def _calcCentralMoment(self, p, q, scale_norm=1):
         """ Calculate central geometric moments of the section image
         p, q are the orders in the x, y directions
         """
@@ -1668,7 +1672,7 @@ class Slice:
                 Itemp[:, j] = Itemp[:, j] * (self._iC[1][j] ** q)
 
         # scale normalise
-        if scaleNorm:
+        if scale_norm:
             u = Itemp.sum() / (self.M00 ** (1.0 + ((p + q) / 2.0)))
         else:
             u = Itemp.sum()
@@ -2025,7 +2029,7 @@ def calcTheta(x, y):
 
 
 # ======================================================================#
-class quadraticCurve(object):
+class QuadraticCurve(object):
     fitTol = 0.001
 
     def __init__(self, dimension: int, params: Optional[np.ndarray] = None):
@@ -2134,15 +2138,15 @@ def cropImageAroundPoints(
         points: np.ndarray,
         scan: Scan,
         pad: int,
-        croppedName: Optional[str] = None,
-        transformToIndexSpace: bool = True,
-        zShift: bool = True,
-        negSpacing: bool = False,
-        offsetXYCoeff: float = 1.0) -> Tuple[Scan, np.ndarray]:
+        cropped_name: Optional[str] = None,
+        transform_to_index_space: bool = True,
+        z_shift: bool = True,
+        neg_spacing: bool = False,
+        offset_xy_coeff: float = 1.0) -> Tuple[Scan, np.ndarray]:
     # offsetXYCoeff = 1 for VIFM, -1 for no negSpacing (ossis)
 
-    if transformToIndexSpace:
-        x_image = scan.coord2Index(points, zShift, negSpacing)
+    if transform_to_index_space:
+        x_image = scan.coord2Index(points, z_shift, neg_spacing)
     else:
         x_image = points
 
@@ -2161,15 +2165,15 @@ def cropImageAroundPoints(
     log.debug('cropping max: %s, %s, %s', maxx, maxy, maxz)
     log.debug('cropping min: %s, %s, %s', minx, miny, minz)
     crop_offset = numpy.array([minx, miny, minz])
-    if not negSpacing:
-        if zShift:
+    if not neg_spacing:
+        if z_shift:
             z_correction = scan.voxelSpacing[2] * numpy.array([0.0, 0.0, (maxz - minz - scan.I.shape[2])])
         else:
             z_correction = [0, 0, 0]
     else:
         z_correction = [0, 0, 0]
 
-    new_scan_origin = scan.voxelOrigin + offsetXYCoeff * crop_offset * scan.voxelSpacing + z_correction
+    new_scan_origin = scan.voxelOrigin + offset_xy_coeff * crop_offset * scan.voxelSpacing + z_correction
 
     # calculate new affine matrices
     if scan.USE_DICOM_AFFINE:
@@ -2180,18 +2184,18 @@ def cropImageAroundPoints(
         i2cmat = None
         c2imat = None
 
-    if croppedName is None:
+    if cropped_name is None:
         if scan.name is None:
-            croppedName = 'cropped'
+            cropped_name = 'cropped'
         else:
-            croppedName = scan.name + '_cropped'
-    cropped_scan = Scan(croppedName)
+            cropped_name = scan.name + '_cropped'
+    cropped_scan = Scan(cropped_name)
     cropped_scan.USE_DICOM_AFFINE = scan.USE_DICOM_AFFINE
     cropped_scan.isMasked = scan.isMasked
     cropped_scan.setImageArray(
         scan.I[minx:maxx, miny:maxy, minz:maxz],
-        voxelSpacing=scan.voxelSpacing,
-        voxelOrigin=new_scan_origin,
+        voxel_spacing=scan.voxelSpacing,
+        voxel_origin=new_scan_origin,
         i2cmat=i2cmat,
         c2imat=c2imat,
     )

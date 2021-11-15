@@ -15,10 +15,9 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 import logging
 import sys
 import time
-import numpy
 from scipy import ndimage
 
-from gias2.learning import PCA
+from gias3.learning import PCA
 
 log = logging.getLogger(__name__)
 
@@ -31,11 +30,11 @@ except ImportError:
 usePyxScan = True
 
 
-def genSamplingPoints(X, N, d, xLim):
+def genSamplingPoints(X, N, d, x_lim):
     """ at each point in X[i], in direction N[i], calc the coordinates
     of d points between X[i]+xLim[0]*N[i] and x[i]+xLim[1]*N[i]
     """
-    t = numpy.linspace(xLim[0], xLim[1], d)
+    t = numpy.linspace(x_lim[0], x_lim[1], d)
     p = (t[:, numpy.newaxis, numpy.newaxis] * N + X).transpose((1, 0, 2))
     return p
 
@@ -70,29 +69,29 @@ def calcDerivArray(P):
     return dP
 
 
-def _calcPPCPModes(epI, PPC, cutOff):
+def _calcPPCPModes(ep_i, PPC, cut_off):
     pModes = []
-    for i in epI:
+    for i in ep_i:
         # calculate number of modes to use for profile matching
         cumSpec = numpy.cumsum(PPC[i].getNormSpectrum())
-        pModes.append(numpy.arange(numpy.where(cumSpec > cutOff)[0][0]))
+        pModes.append(numpy.arange(numpy.where(cumSpec > cut_off)[0][0]))
 
     return pModes
 
 
-def _asmStopCrit(matchIndices, nSamples, window=0.1, threshold=0.95):
+def _asmStopCrit(match_indices, n_samples, window=0.1, threshold=0.95):
     """ returns true if thresh proportion of xpads are in the middle
     window proportion of pLength
     """
-    n0 = nSamples / 2.0 - nSamples * window
-    n1 = nSamples / 2.0 + nSamples * window
+    n0 = n_samples / 2.0 - n_samples * window
+    n1 = n_samples / 2.0 + n_samples * window
 
     ##
     # print n0, n1
     ##
 
-    passes = ((n0 <= matchIndices) & (matchIndices <= n1)).sum()
-    passFrac = float(passes) / len(matchIndices)
+    passes = ((n0 <= match_indices) & (match_indices <= n1)).sum()
+    passFrac = float(passes) / len(match_indices)
     if passFrac > threshold:
         return True, passFrac
     else:
@@ -116,7 +115,7 @@ if usePyxScan:
         setup_args={"include_dirs": numpy.get_include()},
         language_level=3
     )
-    from gias2.image_analysis import asm_search_c
+    from gias3.image_analysis import asm_search_c
 
     # reload(asm_search_c)
     scanProfile = asm_search_c.scanProfile
@@ -156,7 +155,7 @@ class ASMSegmentationParams(object):
     PPCVarCutoff = 0.9
 
     def __init__(self, **params):
-        if params != None:
+        if params is not None:
             self.setParams(params)
 
         self._postProcess()
@@ -188,7 +187,7 @@ class ASMSegmentation(object):
         self.hasMaskedImage = False
         self.filterLandmarks = True
 
-        if image != None:
+        if image is not None:
             self.setImage(image)
 
         self.params = params
@@ -220,7 +219,7 @@ class ASMSegmentation(object):
         self.PPC = P
 
     def loadProfilePC(self, filename=None):
-        if filename == None:
+        if filename is None:
             filename = self.params.PPCFilename
 
         self.PPC = PCA.PCList()
@@ -241,8 +240,8 @@ class ASMSegmentation(object):
 
         # first reject any point outside of the image volume
         inds = self.image.coord2Index(numpy.array(landmarks), \
-                                      zShift=self.params.imageZShift, \
-                                      negSpacing=self.params.imageNegSpacing)
+                                      z_shift=self.params.imageZShift, \
+                                      neg_spacing=self.params.imageNegSpacing)
 
         if self.hasMaskedImage:
             landmarkMask = numpy.array(
@@ -277,9 +276,9 @@ class ASMSegmentation(object):
         #                   )
         self.XSampleImg = self.image.coord2Index(
             numpy.vstack(self.XSample),
-            zShift=self.params.imageZShift,
-            negSpacing=self.params.imageNegSpacing,
-            roundInt=False,
+            z_shift=self.params.imageZShift,
+            neg_spacing=self.params.imageNegSpacing,
+            round_int=False,
         ).reshape((nLandmarks, nSamples, -1))
 
         # self.P = sampleImage( self.image.I, self.XSampleImg )
@@ -292,14 +291,14 @@ class ASMSegmentation(object):
 
         self.dP = calcDerivArray(self.P)
 
-    def _match2data(self, matchInd, landmarkMask):
+    def _match2data(self, match_ind, landmark_mask):
 
-        validLandmarks = numpy.where(landmarkMask)[0]
-        XSampleValid = self.XSample[landmarkMask, :]
-        data = XSampleValid[numpy.arange(len(validLandmarks), dtype=int), matchInd]
+        validLandmarks = numpy.where(landmark_mask)[0]
+        XSampleValid = self.XSample[landmark_mask, :]
+        data = XSampleValid[numpy.arange(len(validLandmarks), dtype=int), match_ind]
         return data
 
-    def segment(self, meshParams0, verbose=1, debug=0, callback=None):
+    def segment(self, mesh_params0, verbose=1, debug=0, callback=None):
         """
         Run the main segmentation loop.
         meshParams0: array - initial mesh parameters
@@ -314,7 +313,7 @@ class ASMSegmentation(object):
         mRMSOld = 0.0
         meshRMSOld = 0.0
         meshSDOld = 0.0
-        meshParams = numpy.array(meshParams0)
+        meshParams = numpy.array(mesh_params0)
         converged = False
         outputHistory = {'meshParams': [],
                          'meshRMS': [],
@@ -473,12 +472,12 @@ class ASMSegmentation(object):
         return self.meshParamsFinal, data, W, landmarkMask, \
                rmsFinal, sdFinal, passFrac, m, M, outputHistory
 
-    def showProfileMatch(self, profileI, nPModes):
-        PData = self.P[profileI]
-        dPData = self.dP[profileI]
-        ppc = self.PPC.L[profileI]
+    def showProfileMatch(self, profile_i, n_p_modes):
+        PData = self.P[profile_i]
+        dPData = self.dP[profile_i]
+        ppc = self.PPC.L[profile_i]
         dPMean = ppc.getMean()
-        mx, m, M = scanProfile(dPData, ppc, list(range(nPModes)))
+        mx, m, M = scanProfile(dPData, ppc, list(range(n_p_modes)))
 
         f = plot.figure()
         ax1 = f.add_subplot(411)
@@ -505,7 +504,7 @@ class TrainASMPPCs(object):
     pca model for each landmark using the profiles.
     """
 
-    def __init__(self, nSamples, xLim, zShift=True, negSpacing=False):
+    def __init__(self, n_samples, x_lim, z_shift=True, neg_spacing=False):
         """
         input:
         nSamples: integer, number of samples per profile. 
@@ -515,8 +514,8 @@ class TrainASMPPCs(object):
         msSize: None or int, kernel size for median smoothing of image
         """
 
-        self.nSamples = nSamples
-        self.xLim = xLim
+        self.nSamples = n_samples
+        self.xLim = x_lim
 
         self._dP = None
         self._landmarkMasks = None
@@ -525,8 +524,8 @@ class TrainASMPPCs(object):
         self.trainingSamples = None
         self._asm = None
 
-        self.zShift = zShift
-        self.negSpacing = negSpacing
+        self.zShift = z_shift
+        self.negSpacing = neg_spacing
 
         self.params = ASMSegmentationParams(
             ND=self.nSamples,
@@ -537,7 +536,7 @@ class TrainASMPPCs(object):
             imageNegSpacing=self.negSpacing,
         )
 
-    def setTrainingSamples(self, samples, nLandmarks):
+    def setTrainingSamples(self, samples, n_landmarks):
         """
         Define training samples
 
@@ -550,7 +549,7 @@ class TrainASMPPCs(object):
         nLandmarks: the number of landmark points per image
         """
         self.trainingSamples = samples
-        self.nLandmarks = nLandmarks
+        self.nLandmarks = n_landmarks
 
     def sampleTrainingImages(self, debug=False):
         """
@@ -613,9 +612,9 @@ class TrainASMPPCs(object):
         """
         self.PPCs.save(filename)
 
-    def showProfile(self, profileI, subjectI):
-        dPSubject = self._dP.data[subjectI, profileI, :]
-        dPMean = self._dP[:, profileI, :].mean(0)
+    def showProfile(self, profile_i, subject_i):
+        dPSubject = self._dP.data[subject_i, profile_i, :]
+        dPMean = self._dP[:, profile_i, :].mean(0)
 
         f = plot.figure()
         ax1 = f.add_subplot(311)
@@ -625,10 +624,10 @@ class TrainASMPPCs(object):
         ax1.plot(dPSubject)
         ax2.plot(dPMean)
 
-        if self.PPCs != None:
-            pcMean = self.PPCs.L[profileI].getMean()
+        if self.PPCs is not None:
+            pcMean = self.PPCs.L[profile_i].getMean()
             ax3.plot(pcMean)
 
         plot.show()
 
-        log.debug('profile masked:', ~self._landmarkMasks[subjectI, profileI])
+        log.debug('profile masked:', ~self._landmarkMasks[subject_i, profile_i])

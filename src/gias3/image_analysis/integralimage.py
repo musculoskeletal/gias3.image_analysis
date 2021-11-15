@@ -12,13 +12,13 @@ file, You can obtain one at http://mozilla.org/MPL/2.0/.
 ===============================================================================
 """
 
+import numpy as np
+
 """
 calculates an integral image
 """
 
 USECYTHON = False
-
-import numpy as np
 
 if USECYTHON:
     import pyximport
@@ -27,7 +27,7 @@ if USECYTHON:
         setup_args={"include_dirs": np.get_include()},
         language_level=3
     )
-    from gias2.image_analysis import integralimagec as IIC
+    from gias3.image_analysis import integralimagec as IIC
 
 
 def makeIntegralArray2(image):
@@ -65,8 +65,8 @@ def makeIntegralArray3(image):
 class IntegralImage2(object):
     _useCython = USECYTHON
 
-    def __init__(self, image, useCython=USECYTHON):
-        self._useCython = useCython
+    def __init__(self, image, use_cython=USECYTHON):
+        self._useCython = use_cython
         if self._useCython:
             self.II = IIC.makeIntegralArray2(image.astype(IIC.DTYPE))
         else:
@@ -81,8 +81,8 @@ class IntegralImage2(object):
 class IntegralImage3(object):
     _useCython = USECYTHON
 
-    def __init__(self, image, useCython=USECYTHON):
-        self._useCython = useCython
+    def __init__(self, image, use_cython=USECYTHON):
+        self._useCython = use_cython
         if self._useCython:
             self.II = IIC.makeIntegralArray3(image.astype(IIC.DTYPE))
         else:

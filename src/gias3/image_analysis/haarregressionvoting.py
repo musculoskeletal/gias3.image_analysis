@@ -19,9 +19,9 @@ import numpy as np
 import sys
 from sklearn.ensemble import ExtraTreesRegressor
 
-from gias2.image_analysis import haar
-from gias2.image_analysis import image_tools
-from gias2.image_analysis import integralimage
+from gias3.image_analysis import haar
+from gias3.image_analysis import image_tools
+from gias3.image_analysis import integralimage
 
 log = logging.getLogger(__name__)
 
@@ -34,26 +34,26 @@ class SamplingError(Exception):
     pass
 
 
-def extractHaarFeatures(II, p, windowSize, haarMode='diff'):
-    X = np.round(p - np.array(windowSize) / 2.0).astype(int)
-    if haarMode == 'diff':
-        return haar.extractAllHaar3DDiff(II, X, windowSize)
-    elif haarMode == 'reldiff':
-        return haar.extractAllHaar3DRelDiff(II, X, windowSize)
-    elif haarMode == 'sign':
-        return haar.extractAllHaar3DSign(II, X, windowSize)
+def extractHaarFeatures(II, p, window_size, haar_mode='diff'):
+    X = np.round(p - np.array(window_size) / 2.0).astype(int)
+    if haar_mode == 'diff':
+        return haar.extractAllHaar3DDiff(II, X, window_size)
+    elif haar_mode == 'reldiff':
+        return haar.extractAllHaar3DRelDiff(II, X, window_size)
+    elif haar_mode == 'sign':
+        return haar.extractAllHaar3DSign(II, X, window_size)
 
 
-def makeHaarFeatureExtractor(II, haarMode):
-    if haarMode == 'diff':
+def makeHaarFeatureExtractor(II, haar_mode):
+    if haar_mode == 'diff':
         def haarFeatureExtractor(p, w):
             X = np.round(p - w / 2.0).astype(int)
             return haar.extractAllHaar3DDiff(II, X.T, w.T.astype(int))
-    elif haarMode == 'reldiff':
+    elif haar_mode == 'reldiff':
         def haarFeatureExtractor(p, w):
             X = np.round(p - w / 2.0).astype(int)
             return haar.extractAllHaar3DRelDiff(II, X.T, w.T.astype(int))
-    elif haarMode == 'sign':
+    elif haar_mode == 'sign':
         def haarFeatureExtractor(p, w):
             X = np.round(p - w / 2.0).astype(int)
             return haar.extractAllHaar3DSign(II, X.T, w.T.astype(int))
@@ -73,7 +73,7 @@ class HaarImage(image_tools.Scan):
     samplesPerPoint = 10  # number volumes to sample around each landmark
     reader = None
 
-    def __init__(self, I=None, voxelSpacing=None, voxelOrigin=None, isMasked=False):
+    def __init__(self, I=None, voxel_spacing=None, voxel_origin=None, is_masked=False):
         """
         instantiation input args:
         I: 3D numpy array
@@ -84,9 +84,9 @@ class HaarImage(image_tools.Scan):
         """
 
         self._displacementGrids = {}
-        self.isMasked = isMasked
+        self.isMasked = is_masked
         if I is not None:
-            self._setImageArray(I, voxelSpacing, voxelOrigin)
+            self._setImageArray(I, voxel_spacing, voxel_origin)
 
         self.haarFeatureExtractor = None
         self.haarFeatureExtractorHaarMode = None
@@ -95,28 +95,28 @@ class HaarImage(image_tools.Scan):
         del self.I
         del self.II
 
-    def _setImageArray(self, I, voxelSpacing=None, voxelOrigin=None):
+    def _setImageArray(self, I, voxel_spacing=None, voxel_origin=None):
         if len(I.shape) != 3:
             raise ValueError('image must be 3D')
 
         self.I = I
         self.II = integralimage.IntegralImage3(self.I)
 
-        if voxelSpacing is None:
+        if voxel_spacing is None:
             self.voxelSpacing = np.array([1.0, 1.0, 1.0])
         else:
-            self.voxelSpacing = voxelSpacing
+            self.voxelSpacing = voxel_spacing
 
-        if voxelOrigin is None:
+        if voxel_origin is None:
             self.voxelOrigin = np.array([0.0, 0.0, 0.0])
         else:
-            self.voxelOrigin = voxelOrigin
+            self.voxelOrigin = voxel_origin
 
-    def setHaarExtractor(self, haarMode):
-        self.haarFeatureExtractorHaarMode = haarMode
-        self.haarFeatureExtractor = makeHaarFeatureExtractor(self.II, haarMode)
+    def setHaarExtractor(self, haar_mode):
+        self.haarFeatureExtractorHaarMode = haar_mode
+        self.haarFeatureExtractor = makeHaarFeatureExtractor(self.II, haar_mode)
 
-    def extractHaarAboutPoint(self, p, windowSize, sampleMode='diff'):
+    def extractHaarAboutPoint(self, p, window_size, sample_mode='diff'):
         """
         extracts Haar features from a volume centered about image
         indices p, with size defined by windowSize.
@@ -129,18 +129,18 @@ class HaarImage(image_tools.Scan):
         a list of haar features
         """
         p = np.array(p)
-        windowSize = np.array(windowSize)
-        X = np.round(p - windowSize / 2.0).astype(int)
-        if sampleMode == 'diff':
-            return haar.extractAllHaar3DDiff(self.II, X, windowSize)
-        elif sampleMode == 'reldiff':
-            return haar.extractAllHaar3DRelDiff(self.II, X, windowSize)
-        elif sampleMode == 'sign':
-            return haar.extractAllHaar3DSign(self.II, X, windowSize)
+        window_size = np.array(window_size)
+        X = np.round(p - window_size / 2.0).astype(int)
+        if sample_mode == 'diff':
+            return haar.extractAllHaar3DDiff(self.II, X, window_size)
+        elif sample_mode == 'reldiff':
+            return haar.extractAllHaar3DRelDiff(self.II, X, window_size)
+        elif sample_mode == 'sign':
+            return haar.extractAllHaar3DSign(self.II, X, window_size)
         else:
             raise ValueError('invalid sampleMode')
 
-    def extractHaarAboutPointRandom(self, p, n, windowSize, dMax, zShift=False, negSpacing=False, haarMode='diff'):
+    def extractHaarAboutPointRandom(self, p, n, window_size, d_max, z_shift=False, neg_spacing=False, haar_mode='diff'):
         """
         randomly extract features in volumes randomly displaced about p.
         Returns list of features and the displacement vectors.
@@ -168,10 +168,10 @@ class HaarImage(image_tools.Scan):
         features: a list of lists of haar features
         """
 
-        windowSize = np.array(windowSize)
+        window_size = np.array(window_size)
         p = np.array(p)
-        displacements = np.random.uniform(low=-dMax, high=dMax, size=(n, 3))
-        sampleIndices = self.coord2Index(p + displacements, zShift, negSpacing)
+        displacements = np.random.uniform(low=-d_max, high=d_max, size=(n, 3))
+        sampleIndices = self.coord2Index(p + displacements, z_shift, neg_spacing)
         # randomly modify windowSize too?
         # randomly alter orientation?
 
@@ -179,16 +179,16 @@ class HaarImage(image_tools.Scan):
         for i, sInd in enumerate(sampleIndices):
             # print sInd
             try:
-                features.append(extractHaarFeatures(self.II, sInd, windowSize, haarMode))
+                features.append(extractHaarFeatures(self.II, sInd, window_size, haar_mode))
             except IndexError:
                 retry = 1
                 while retry:
                     log.debug('retry', retry)
-                    dRetry = np.random.uniform(low=-dMax, high=dMax, size=(3))
-                    sIndRetry = self.coord2Index(p + dRetry, zShift, negSpacing)
+                    dRetry = np.random.uniform(low=-d_max, high=d_max, size=(3))
+                    sIndRetry = self.coord2Index(p + dRetry, z_shift, neg_spacing)
 
                     try:
-                        features.append(extractHaarFeatures(self.II, sIndRetry, windowSize, haarMode))
+                        features.append(extractHaarFeatures(self.II, sIndRetry, window_size, haar_mode))
                     except IndexError:
                         retry += 1
                     else:
@@ -201,8 +201,8 @@ class HaarImage(image_tools.Scan):
 
         return displacements, features
 
-    def extractHaarAboutPointRandomMulti(self, P, n, windowSize, dMax, zShift=False, negSpacing=False, haarMode='diff',
-                                         windowSizeVar=None):
+    def extractHaarAboutPointRandomMulti(self, P, n, window_size, d_max, z_shift=False, neg_spacing=False, haar_mode='diff',
+                                         window_size_var=None):
         """
         randomly extract features in volumes randomly displaced about points P.
         Returns list of lists of features and the displacement vectors.
@@ -232,25 +232,25 @@ class HaarImage(image_tools.Scan):
 
         nPoints = P.shape[0]
         nSamples = n * nPoints
-        windowSize = np.array(windowSize)
+        window_size = np.array(window_size)
         maxRetry = 10000
 
         # generate window sizes
-        if windowSizeVar != None:
-            windowSizes = windowSize * np.random.uniform(low=1.0 - windowSizeVar,
-                                                         high=1.0 + windowSizeVar,
-                                                         size=nSamples)[:, np.newaxis]
+        if window_size_var is not None:
+            windowSizes = window_size * np.random.uniform(low=1.0 - window_size_var,
+                                                          high=1.0 + window_size_var,
+                                                          size=nSamples)[:, np.newaxis]
         else:
-            windowSizes = windowSize * np.ones(nSamples)[:, np.newaxis]
+            windowSizes = window_size * np.ones(nSamples)[:, np.newaxis]
 
         windowSizes = windowSizes.reshape((nPoints, n, 3))
         windowSizes2 = windowSizes / 2.0
 
         # generate displacements
-        displacements = np.random.uniform(low=-dMax, high=dMax, size=(nSamples, 3)).reshape(
+        displacements = np.random.uniform(low=-d_max, high=d_max, size=(nSamples, 3)).reshape(
             (nPoints, n, 3))  # shape = (nPoints, samples per point, 3)
         samplePoints = displacements + P[:, np.newaxis, :]
-        sampleIndices = self.coord2Index(samplePoints.reshape((nSamples, 3)), zShift, negSpacing).reshape(
+        sampleIndices = self.coord2Index(samplePoints.reshape((nSamples, 3)), z_shift, neg_spacing).reshape(
             (nPoints, n, 3))
 
         # randomly alter orientation?
@@ -267,14 +267,14 @@ class HaarImage(image_tools.Scan):
                         sys.stdout.flush()
 
                         # regen displacement
-                        dRetry = np.random.uniform(low=-dMax, high=dMax, size=(3))
-                        indRetry = self.coord2Index(P[pi] + dRetry, zShift, negSpacing)
+                        dRetry = np.random.uniform(low=-d_max, high=d_max, size=(3))
+                        indRetry = self.coord2Index(P[pi] + dRetry, z_shift, neg_spacing)
                         # regen window size
-                        if windowSizeVar != None:
-                            wsRetry = windowSize * np.random.uniform(low=1.0 - windowSizeVar,
-                                                                     high=1.0 + windowSizeVar)
+                        if window_size_var is not None:
+                            wsRetry = window_size * np.random.uniform(low=1.0 - window_size_var,
+                                                                      high=1.0 + window_size_var)
                         else:
-                            wsRetry = windowSize
+                            wsRetry = window_size
 
                         wsRetry2 = wsRetry / 2.0
 
@@ -290,7 +290,7 @@ class HaarImage(image_tools.Scan):
                                 raise SamplingError('Unable to sample in bounds')
 
         # output shape = (nPoints*n, number of features)
-        self.setHaarExtractor(haarMode)
+        self.setHaarExtractor(haar_mode)
         features = self.haarFeatureExtractor(sampleIndices.reshape((nSamples, 3)),
                                              windowSizes.reshape((nSamples, 3))).T
         # shape = (nPoints, n, number of features)
@@ -301,7 +301,7 @@ class HaarImage(image_tools.Scan):
 
         return displacements, features
 
-    def extractHaarAboutPointGridSphere(self, p, n, windowSize, dMax, zShift=False, negSpacing=False):
+    def extractHaarAboutPointGridSphere(self, p, n, window_size, d_max, z_shift=False, neg_spacing=False):
         """
         Extract features in volumes distributed in a regular grid within a sphere of radius
         dMax about point P. n is the number of samples along the diameter. Sample volumes
@@ -324,19 +324,19 @@ class HaarImage(image_tools.Scan):
         """
 
         try:
-            displacements = self._displacementGrids[(dMax, n)]
+            displacements = self._displacementGrids[(d_max, n)]
         except KeyError:
-            displacements = _generateSampleGrid(dMax, n)
-            self._displacementGrids[(dMax, n)] = displacements
+            displacements = _generateSampleGrid(d_max, n)
+            self._displacementGrids[(d_max, n)] = displacements
 
         # sample
-        sampleIndices = self.coord2Index(p + displacements, zShift, negSpacing)
+        sampleIndices = self.coord2Index(p + displacements, z_shift, neg_spacing)
 
         features = []
         featureDisplacements = []
         for i, d in enumerate(sampleIndices):
             try:
-                features.append(extractHaarFeatures(self.II, d, windowSize))
+                features.append(extractHaarFeatures(self.II, d, window_size))
             except IndexError:
                 # out of bounds sample, ignore
                 pass
@@ -351,8 +351,8 @@ class HaarImage(image_tools.Scan):
 
         return featureDisplacements, features
 
-    def extractHaarAboutPointGridSphereMulti(self, P, n, windowSize, dMax, zShift=False, negSpacing=False,
-                                             haarMode='diff'):
+    def extractHaarAboutPointGridSphereMulti(self, P, n, window_size, d_max, z_shift=False, neg_spacing=False,
+                                             haar_mode='diff'):
         """
         Extract features in volumes distributed in a regular grid within a sphere of radius
         dMax about points P. n is the number of samples along the diameter. Sample volumes
@@ -374,15 +374,15 @@ class HaarImage(image_tools.Scan):
         features: a list of lists of haar features
         """
         nPoints = P.shape[0]
-        windowSize = np.array(windowSize)
-        windowSize2 = windowSize / 2.0
-        self.setHaarExtractor(haarMode)
+        window_size = np.array(window_size)
+        windowSize2 = window_size / 2.0
+        self.setHaarExtractor(haar_mode)
 
         try:
-            disp = self._displacementGrids[(dMax, n)]
+            disp = self._displacementGrids[(d_max, n)]
         except KeyError:
-            disp = _generateSampleGrid(dMax, n)
-            self._displacementGrids[(dMax, n)] = disp
+            disp = _generateSampleGrid(d_max, n)
+            self._displacementGrids[(d_max, n)] = disp
 
         # generate sampling points
         sampleIndices = []
@@ -390,16 +390,16 @@ class HaarImage(image_tools.Scan):
         nSamples = []
         for p in P:
             samplePoints = p + disp
-            sampleIndicesTemp = self.coord2Index(samplePoints, zShift, negSpacing)
-            inBounds = np.array([(self.checkIndexInBounds(ind + windowSize2) and \
+            sampleIndicesTemp = self.coord2Index(samplePoints, z_shift, neg_spacing)
+            inBounds = np.array([(self.checkIndexInBounds(ind + windowSize2) and
                                   self.checkIndexInBounds(ind - windowSize2)) for ind in sampleIndicesTemp])
-            inBoundsI = np.where(inBounds == True)[0]
+            inBoundsI = np.where(inBounds is True)[0]
             sampleIndices.append(sampleIndicesTemp[inBoundsI, :])
             displacements.append(disp[inBoundsI, :])
             nSamples.append(sampleIndices[-1].shape[0])
 
         sampleIndicesFlat = np.vstack(sampleIndices)
-        windowSizes = windowSize + np.zeros_like(sampleIndicesFlat)
+        windowSizes = window_size + np.zeros_like(sampleIndicesFlat)
         # output shape = (nPoints*n, number of features)
         featuresTemp = self.haarFeatureExtractor(sampleIndicesFlat, windowSizes).T
         # shape = (nPoints, n, number of features)
@@ -418,17 +418,17 @@ class HaarImage(image_tools.Scan):
         return displacements, features
 
 
-def _generateSampleGrid(dMax, n):
+def _generateSampleGrid(d_max, n):
     # make cube grid about origin
-    x, y, z = np.mgrid[-dMax:dMax:complex(0, n),
-              -dMax:dMax:complex(0, n),
-              -dMax:dMax:complex(0, n),
+    x, y, z = np.mgrid[-d_max:d_max:complex(0, n),
+              -d_max:d_max:complex(0, n),
+              -d_max:d_max:complex(0, n),
               ]
     X = np.vstack([x.ravel(), y.ravel(), z.ravel()]).T
 
     # filter out grid points outside sphere
     d = np.sqrt((X ** 2.0).sum(1))
-    displacements = X[np.where(d <= dMax)[0]]
+    displacements = X[np.where(d <= d_max)[0]]
     return displacements
 
 
@@ -441,7 +441,7 @@ class TrainCLMRFs(object):
     displacements.
     """
 
-    def __init__(self, nSamples, windowSize, dMax, haarMode='diff', windowSizeVar=None, zShift=True, negSpacing=False):
+    def __init__(self, n_samples, window_size, d_max, haar_mode='diff', window_size_var=None, z_shift=True, neg_spacing=False):
         """
         input:
         nSamples: integer, number of random samples to take around each landmark point. 
@@ -451,20 +451,20 @@ class TrainCLMRFs(object):
         negSpacing: boolean, apply negSpacing in coord2Index mapping
         """
 
-        self.nSamples = nSamples
-        self.windowSize = windowSize
-        self.dMax = dMax
-        self.haarMode = haarMode
-        self.windowSizeVar = windowSizeVar
+        self.nSamples = n_samples
+        self.windowSize = window_size
+        self.dMax = d_max
+        self.haarMode = haar_mode
+        self.windowSizeVar = window_size_var
 
         self.pointDisplacements = None
         self.pointFeatures = None
         self.RFs = []
 
-        self.zShift = zShift
-        self.negSpacing = negSpacing
+        self.zShift = z_shift
+        self.negSpacing = neg_spacing
 
-    def setTrainingSamples(self, samples, nPoints):
+    def setTrainingSamples(self, samples, n_points):
         """
         Define training samples
 
@@ -476,7 +476,7 @@ class TrainCLMRFs(object):
         nPoints: the number of landmark points per image
         """
         self.trainingSamples = samples
-        self.nPoints = nPoints
+        self.nPoints = n_points
         self.pointDisplacements = []
         self.pointFeatures = []
 
@@ -494,9 +494,9 @@ class TrainCLMRFs(object):
                 pointDisplacements, \
                 pointFeatures = trainingImage.extractHaarAboutPointRandomMulti(
                     P, self.nSamples, self.windowSize, self.dMax,
-                    zShift=self.zShift, negSpacing=self.negSpacing,
-                    haarMode=self.haarMode,
-                    windowSizeVar=self.windowSizeVar)
+                    z_shift=self.zShift, neg_spacing=self.negSpacing,
+                    haar_mode=self.haarMode,
+                    window_size_var=self.windowSizeVar)
             except SamplingError:
                 log.debug('WARNING: skipped due to out of bounds sampling')
             else:
@@ -575,7 +575,7 @@ def loadRFs(filename):
 # voting collecting functions                            #
 # ========================================================#
 
-def collectVoteCoMStd(displacementVotes, samplePoints):
+def collectVoteCoMStd(displacement_votes, sample_points):
     """
     for each landmark, its datapoint is the centre of mass of all points from regressed samples.
     The weight associated with each datapoint is the std of distances forom the centre of mass.
@@ -584,7 +584,7 @@ def collectVoteCoMStd(displacementVotes, samplePoints):
     # left-right flip hack
     # displacementVotes[:,0] = displacementVotes[:,0]*-1.0
     ######################
-    voteCoords = samplePoints - displacementVotes  # minus because RFs are trained on displacements from landmarks to a sample point, now it is the reverse
+    voteCoords = sample_points - displacement_votes  # minus because RFs are trained on displacements from landmarks to a sample point, now it is the reverse
     CoM = voteCoords.mean(0)
     std = np.sqrt(((voteCoords - CoM) ** 2.0).sum(1)).std()
     return CoM, std

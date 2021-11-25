@@ -434,7 +434,7 @@ class Scan(object):
         # reorder slices by slice_ location
         self.I = self.I[:, :, numpy.argsort(self.sliceLocations)]
 
-        if slice_spacing_override != None:
+        if slice_spacing_override is not None:
             self.sliceSpacing = slice_spacing_override
 
         # set axes to be l-r, a-p, s-i
@@ -499,7 +499,7 @@ class Scan(object):
         self.voxelSpacing = numpy.array(self.stack.sampling[::-1])  # original
         # ======================================================#
 
-        if slice_spacing_overide != None:
+        if slice_spacing_overide is not None:
             self.voxelSpacing[2] = slice_spacing_overide
         self.voxelOrigin = numpy.array(self.stack.info.ImagePositionPatient)
         # self.voxelOffset = self.voxelOrigin - (-1.0*self.voxelSpacing)*self.I.shape
@@ -741,7 +741,7 @@ class Scan(object):
     # ~ """ return an ITK image from an input imageArray
     # ~ """
     # ~
-    # ~ if OutputImageType == None:
+    # ~ if OutputImageType is None:
     # ~ itk_py_converter = itk.PyBuffer[self.imageType]
     # ~ else:
     # ~ itk_py_converter = itk.PyBuffer[OutputImageType]
@@ -1369,7 +1369,7 @@ class Scan(object):
         self.qCT.calibrate()
 
     def getImageQCT(self, dtype=None):
-        if dtype == None:
+        if dtype is None:
             dtype = numpy.int16
         IBMD = self.qCT.int2BMD(self.I).astype(dtype)
         return IBMD

@@ -298,8 +298,8 @@ def _makeMeshFitPCFit(obj_maker, GF, GD, SSM, fit_modes, m_weight, ep_index, gf_
             # print 'meshFitPCFit x0:', x0
             # obj = objMaker(GF, data, GD, dataWeights=weights, epIndex=epIndex, evaluator=GFCoordEval )
             obj = obj_maker(GF, data, GD, dataWeights=weights, epIndex=landmark_indices, evaluator=None)
-            GXOpt, GPOpt = PCFitter.rigidModeNRotateAboutCoMFit(obj, modes=fit_modes[1:], x0=x0, mWeight=m_weight,
-                                                                funcArgs=())
+            GXOpt, GPOpt = PCFitter.rigidModeNRotateAboutCoMFit(obj, modes=fit_modes[1:], x0=x0, m_weight=m_weight,
+                                                                func_args=())
             GF.set_field_parameters(GPOpt.copy().reshape((3, -1, 1)))
             # error calculation
             fullError = obj(GPOpt.copy())
@@ -311,8 +311,8 @@ def _makeMeshFitPCFit(obj_maker, GF, GD, SSM, fit_modes, m_weight, ep_index, gf_
             # print 'meshFitPCFit x0:', x0
             # obj = objMaker(GF, data, GD, dataWeights=weights, epIndex=epIndex, evaluator=GFCoordEval )
             obj = obj_maker(GF, data, GD, dataWeights=weights, epIndex=landmark_indices, evaluator=None)
-            GXOpt, GPOpt = PCFitter.rigidModeNRotateAboutCoMFit(obj, modes=fit_modes[1:], x0=x0, mWeight=m_weight,
-                                                                funcArgs=())
+            GXOpt, GPOpt = PCFitter.rigidModeNRotateAboutCoMFit(obj, modes=fit_modes[1:], x0=x0, m_weight=m_weight,
+                                                                func_args=())
             GF.set_field_parameters(GPOpt.copy().reshape((3, -1, 1)))
             # error calculation
             meshRMS = np.sqrt(obj(GPOpt.copy()).mean())
@@ -358,7 +358,7 @@ def _makeMeshFitPointPCFit(SSM, fit_modes, mahalanobis_weight=0.0, init_rotation
 
         # project against SSM
         pcWeights, reconDataT, dataT, reconData = PCA_fitting.fitSSMTo3DPoints(
-            data, SSM, fit_modes, fit_point_indices=landmark_indices, mWeight=mahalanobis_weight,
+            data, SSM, fit_modes, fit_point_indices=landmark_indices, m_weight=mahalanobis_weight,
             init_rotation=init_rotation, do_scale=do_scale, landmark_targets=landmark_targets,
             landmark_evaluator=landmark_evaluator, landmark_weights=landmark_weights,
             verbose=True)
@@ -401,8 +401,8 @@ def _makeMeshFitPointPCFitBad(SSM, fit_modes, m_weight=0.0):
                 return _objSubsetPoints
 
         obj = _makeObj(data, landmark_indices)
-        xOpt, pOpt = pcFit.rigidModeNRotateAboutCoMFit(obj, modes=fit_modes, x0=x0, mWeight=m_weight, maxfev=0,
-                                                       funcArgs=())
+        xOpt, pOpt = pcFit.rigidModeNRotateAboutCoMFit(obj, modes=fit_modes, x0=x0, m_weight=m_weight, maxfev=0,
+                                                       func_args=())
         pOpt = pOpt.reshape((3, -1)).T
 
         # errors
@@ -556,7 +556,7 @@ def runGFCLM(clm, scan, GF, GF_fit_mode, GF_get_params, shape_model, shape_model
             GF.get_all_point_positions(),
             shape_model,
             shape_model_modes,
-            mWeight=0.5
+            m_weight=0.5
         )[0]
 
         # # align GF to mean GF

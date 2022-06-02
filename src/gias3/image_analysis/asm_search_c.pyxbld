@@ -1,0 +1,11 @@
+import numpy as np
+
+def make_ext(modname, pyxfilename):
+    from distutils.extension import Extension
+    ext = Extension(name = modname,
+        sources=[pyxfilename],
+        extra_compile_args=[f'-I{np.get_include()}'])
+    return ext
+
+def make_setup_args():
+    return dict(script_args=["--verbose"])

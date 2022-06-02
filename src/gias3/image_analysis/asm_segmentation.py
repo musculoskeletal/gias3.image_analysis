@@ -111,8 +111,8 @@ if usePyxScan:
     import numpy
     import pyximport
 
+    # Using Pyxbld file to set numpy include directory.
     pyximport.install(
-        setup_args={"include_dirs": numpy.get_include()},
         language_level=3
     )
     from gias3.image_analysis import asm_search_c
@@ -258,15 +258,15 @@ class ASMSegmentation(object):
         """
 
         nLandmarks = self.XMesh.shape[0]
-        nSamples = self.params.ND + self.params.NPad * 2
+        nSamples = int(self.params.ND + self.params.NPad * 2)
 
         # generated in real coords
         # shape = (nlandmarks, nsamples, 3)
         self.XSample = genSamplingPoints(self.XMesh,
                                          self.XN,
                                          nSamples,
-                                         [self.params.NLim[0] - self.params.NPad * self.params.NRes,
-                                          self.params.NLim[1] + self.params.NPad * self.params.NRes],
+                                         [int(self.params.NLim[0] - self.params.NPad * self.params.NRes),
+                                          int(self.params.NLim[1] + self.params.NPad * self.params.NRes)],
                                          )
 
         # convert to image coordinates
@@ -403,7 +403,7 @@ class ASMSegmentation(object):
 
             newMeshParams, meshRMS, meshSD = self.fitMesh(data, x0=meshParams.copy(),
                                                           weights=W,
-                                                          landmarkIndices=numpy.where(landmarkMask)[0])
+                                                          landmark_indices=numpy.where(landmarkMask)[0])
 
             if debug:
                 log.debug('mesh fit done (%6.3fs)' % (time.time() - tprev))
